@@ -4,7 +4,6 @@ import (
 	"./network/bcast"
 	"./network/localip"
 	"./network/peers"
-	"./network/tcp"
 	"flag"
 	"fmt"
 	"os"

@@ -6,19 +6,22 @@ import (
 	"bufio"
 	"os"
 	"strings"
+	"time"
+	"io"
 )
 
 
-func CheckDisconnect(c Conn){
+func CheckDisconnect(c net.Conn){
 	one := []byte{}
 	c.SetReadDeadline(time.Now())
 	if _, err := c.Read(one); err == io.EOF {
-	  l.Printf(logger.LevelDebug, "%s detected closed LAN connection", id)
-	  c.Close()
-	  c = nil
+		fmt.Printf("%s detected closed LAN connection", id)
+		c.Close()
+		c = nil
 	} else {
-	  var zero time.Time
-	  c.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+		var zero time.Time
+		c.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+	}
 }
 
 func tcp_client(){
@@ -43,7 +46,7 @@ func tcp_client(){
 	}
 }
 
-funct tcp_server(){
+func tcp_server(){
 	// connect to this socket
 	conn, _ := net.Dial("tcp", "127.0.0.1:8081")
 	for { 
