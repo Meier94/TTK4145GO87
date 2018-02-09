@@ -1,4 +1,4 @@
-package tcp
+package tcpmod
 
 import (
 	"net"
@@ -15,23 +15,23 @@ func CheckDisconnect(c net.Conn){
 	one := []byte{}
 	c.SetReadDeadline(time.Now())
 	if _, err := c.Read(one); err == io.EOF {
-		fmt.Printf("%s detected closed LAN connection", id)
+		fmt.Print("detected closed LAN connection")
 		c.Close()
 		c = nil
 	} else {
-		var zero time.Time
 		c.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
 	}
 }
 
-func tcp_client(){
+func Tcp_client(){
 	fmt.Println("Launching server...")
 
 	// listen on all interfaces
-	ln, _ := net.Listen("tcp", ":8081")
+	ln, _ := net.Listen("tcp", ":4487")
 
 	// accept connection on port
 	conn, _ := ln.Accept()
+	fmt.Print("")
 
 	// run loop forever (or until ctrl-c)
 	for {
@@ -46,9 +46,9 @@ func tcp_client(){
 	}
 }
 
-func tcp_server(){
+func Tcp_server(){
 	// connect to this socket
-	conn, _ := net.Dial("tcp", "127.0.0.1:8081")
+	conn, _ := net.Dial("tcp", "192.241.187.152:4487")
 	for { 
 		// read in input from stdin
 		reader := bufio.NewReader(os.Stdin)

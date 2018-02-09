@@ -1,14 +1,14 @@
 package main
 
 import (
-	"./network/bcast"
+//	"./network/bcast"
 	"./network/localip"
-	"./network/peers"
-	"./network/tcp"
+//	"./network/peers"
+	"./network/tcpmod"
 	"flag"
 	"fmt"
 	"os"
-	"time"
+//	"time"
 )
 
 // We define some custom struct to send over the network.
@@ -42,45 +42,12 @@ func main() {
 	if err == nil {
 		println(localIP)
 	}
-	// We make a channel for receiving updates on the id's of the peers that are
-	//  alive on the network
-	peerUpdateCh := make(chan peers.PeerUpdate)
-	// We can disable/enable the transmitter after it has been started.
-	// This could be used to signal that we are somehow "unavailable".
-	peerTxEnable := make(chan bool)
-	go peers.Transmitter(15647, id, peerTxEnable)
-	go peers.Receiver(15647, peerUpdateCh)
-
-	// We make channels for sending and receiving our custom data types
-	helloTx := make(chan HelloMsg)
-	helloRx := make(chan HelloMsg)
-	// ... and start the transmitter/receiver pair on some port
-	// These functions can take any number of channels! It is also possible to
-	//  start multiple transmitters/receivers on the same port.
-	go bcast.Transmitter(16569, helloTx)
-	go bcast.Receiver(16569, helloRx)
-
-	// The example message. We just send one of these every second.
-	go func() {
-		helloMsg := HelloMsg{"Hello from " + id, 0}
-		for {
-			helloMsg.Iter++
-			helloTx <- helloMsg
-			time.Sleep(1 * time.Second)
-		}
-	}()
-
-	fmt.Println("Started")
-	for {
-		select {
-		case p := <-peerUpdateCh:
-			fmt.Printf("Peer update:\n")
-			fmt.Printf("  Peers:    %q\n", p.Peers)
-			fmt.Printf("  New:      %q\n", p.New)
-			fmt.Printf("  Lost:     %q\n", p.Lost)
-
-		case a := <-helloRx:
-			fmt.Printf("Received: %#v\n", a)
-		}
+	
+	if id == "1" {
+		tcpmod.Tcp_client()
 	}
+	if id == "2" {
+		tcpmod.Tcp_server()
+	}
+
 }
