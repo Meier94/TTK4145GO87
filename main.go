@@ -45,9 +45,11 @@ func main() {
 	
 	if id == "1" {
 		tcpmod.Tcp_client()
+
 	}
 	if id == "2" {
 		tcpmod.Tcp_server()
+		
 	}
 
 }
