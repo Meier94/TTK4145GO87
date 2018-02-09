@@ -48,7 +48,10 @@ func Tcp_client(){
 
 func Tcp_server(){
 	// connect to this socket
-	conn, _ := net.Dial("tcp", "129.241.187.152:4487")
+	conn, err := net.Dial("tcp", "129.241.187.152:4487")
+	if err != nil {
+		fmt.Fprintf(err + "\n");
+	}
 	for { 
 		// read in input from stdin
 		reader := bufio.NewReader(os.Stdin)
