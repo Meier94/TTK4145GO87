@@ -31,7 +31,7 @@ func Tcp_client(){
 
 	// accept connection on port
 	conn, _ := ln.Accept()
-	fmt.Print("")
+	fmt.Printf("Connected to %q\n", conn.RemoteAddr())
 
 	// run loop forever (or until ctrl-c)
 	for {
@@ -48,9 +48,17 @@ func Tcp_client(){
 
 func Tcp_server(){
 	// connect to this socket
-	conn, err := net.Dial("tcp", "129.241.187.152:4487")
-	if err != nil {
-		fmt.Println(err);
+	var err error
+	var conn net.Conn
+
+	//loops infinitely until it manages to connect
+	for {
+		conn, err = net.Dial("tcp", "129.241.187.152:4487")
+		if err == nil {
+			break
+		}
+		fmt.Println(err)
+		time.Sleep(1 * time.Second)
 	}
 	for { 
 		// read in input from stdin
