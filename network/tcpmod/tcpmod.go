@@ -31,7 +31,7 @@ func Tcp_client(){
 
 	// accept connection on port
 	conn, _ := ln.Accept()
-	fmt.Printf("Connected to %q\n", conn.RemoteAddr())
+	fmt.Printf("Connected to %q\n", conn.LocalAddr())
 
 	// run loop forever (or until ctrl-c)
 	for {
