@@ -50,7 +50,7 @@ func Tcp_server(){
 	// connect to this socket
 	conn, err := net.Dial("tcp", "129.241.187.152:4487")
 	if err != nil {
-		fmt.Printf(err + "\n");
+		fmt.Println(err);
 	}
 	for { 
 		// read in input from stdin
