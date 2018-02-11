@@ -12,9 +12,9 @@ import (
 )
 
 type msg_t struct{
-	id int
-	tall1 int
-	tall2 int
+	id int32
+	tall1 int32
+	tall2 int32
 }
 
 func Tcp_client(){
@@ -30,14 +30,15 @@ func Tcp_client(){
 
 	msg := msg_t{id: 1, tall1:100, tall2:300}
 	buf := toBytes(&msg)
-	var buf2[]byte
+	fmt.Printf("len: %d\n", len(buf))
+	buf2 := make([]byte,BUFLEN)
 	count := 0
 	for {
 		// will listen for message to process ending in newline (\n)
 
 		conn.Write([]byte(buf))
 		for {
-			conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+			conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 			n, err := conn.Read([]byte(buf2))
 			if err != nil {
 				fmt.Printf("Read fail: %d,%s, count: %d\n", n, err, count)
@@ -53,7 +54,7 @@ func Tcp_client(){
 	}
 }
 
-
+const BUFLEN int = 12
 
 func toMsg(data []byte) *msg_t{
 	buf := new(bytes.Buffer)
@@ -68,11 +69,10 @@ func toMsg(data []byte) *msg_t{
 
 func toBytes(data *msg_t) []byte{
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.LittleEndian, &data)
+	err := binary.Write(buf, binary.LittleEndian, data)
 	if err != nil {
 		fmt.Println("binary.Write failed:", err)
 	}
-	fmt.Printf("data: %s\n", buf)
 	return buf.Bytes()
 }
 
@@ -85,7 +85,7 @@ func Tcp_server(){
 
 	//loops infinitely until it manages to connect
 	for {
-		conn, err = net.Dial("tcp", "129.241.187.146:4487")
+		conn, err = net.Dial("tcp", "129.241.187.153:4487")
 		if err == nil {
 			break
 		}
@@ -94,10 +94,11 @@ func Tcp_server(){
 	}
 	count := 0
 	for {
-		buf := []byte{'g','o','l','a','n','g'}
-		buf2 := []byte{'g','o','l','a','n','g'}
+		buf := make([]byte,BUFLEN)
+		msg := msg_t{id: 1, tall1:100, tall2:300}
+		buf2 := toBytes(&msg)
 		for {
-			conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+			conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 			n, err := conn.Read([]byte(buf))
 			if err != nil {
 				fmt.Printf("Read fail: %d,%s, count: %d\n", n, err, count)
