@@ -8,8 +8,14 @@ import (
 //	"strings"
 	"time"
 	"bytes"
+	"encoding/binary"
 )
 
+type msg_t struct{
+	id int
+	tall1 int
+	tall2 int
+}
 
 func Tcp_client(){
 	fmt.Println("Launching server test...")
@@ -21,15 +27,18 @@ func Tcp_client(){
 	conn, _ := ln.Accept()
 	fmt.Printf("Connected to %q\n", conn.RemoteAddr())
 	// run loop forever (or until ctrl-c)
+
+	msg := msg_t{id: 1, tall1:100, tall2:300}
+	buf := toBytes(&msg)
+	var buf2[]byte
 	count := 0
 	for {
 		// will listen for message to process ending in newline (\n)
-		buf := []byte{'g','o','l','a','n','g'}
-		buf2 := []byte{'g','o','l','a','n','g'}
+
 		conn.Write([]byte(buf))
 		for {
 			conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
-			n, err := conn.Read([]byte(buf))
+			n, err := conn.Read([]byte(buf2))
 			if err != nil {
 				fmt.Printf("Read fail: %d,%s, count: %d\n", n, err, count)
 				return
@@ -46,6 +55,28 @@ func Tcp_client(){
 
 
 
+func toMsg(data []byte) *msg_t{
+	buf := new(bytes.Buffer)
+	var msg msg_t
+	err := binary.Read(buf, binary.BigEndian, &msg)
+	if err != nil {
+		panic(err)
+	}
+	return &msg
+}
+
+
+func toBytes(data *msg_t) []byte{
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, &data)
+	if err != nil {
+		fmt.Println("binary.Write failed:", err)
+	}
+	fmt.Printf("data: %s\n", buf)
+	return buf.Bytes()
+}
+
+
 //Klarer å sende ~215k meldinger frem og tilbake med annen maskin på 30 sek (139 us pr meldingsutveksling (mld + ack))
 func Tcp_server(){
 	// connect to this socket
@@ -54,7 +85,7 @@ func Tcp_server(){
 
 	//loops infinitely until it manages to connect
 	for {
-		conn, err = net.Dial("tcp", "129.241.187.152:4487")
+		conn, err = net.Dial("tcp", "129.241.187.146:4487")
 		if err == nil {
 			break
 		}
