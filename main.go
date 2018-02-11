@@ -43,13 +43,15 @@ func main() {
 		println(localIP)
 	}
 	
-	if id == "1" {
-		tcpmod.Tcp_client()
-
-	}
-	if id == "2" {
-		tcpmod.Tcp_server()
-		
-	}
+	i := tcpmod.COMPLETE
+	i++
+//	if id == "1" {
+//		tcpmod.Tcp_client()
+//
+//	}
+//	if id == "2" {
+//		tcpmod.Tcp_server()
+//		
+//	}
 
 }
