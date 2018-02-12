@@ -3,8 +3,8 @@ package tcpmod
 import (
 	"net"
 	"fmt"
-//	"bufio"
-//	"os"
+	"bufio"
+	"os"
 //	"strings"
 	"time"
 //	"io"
@@ -15,12 +15,13 @@ import (
 //felt må ha stor forbokstav for å kunne bli konvertert fra []byte
 type msg_t struct{
 	TalkId uint32	//talk-id
-	MsgId uint8
+	ClientId uint8
 	Type uint8
-	Data uint16 //is allowed (Y) for serialization
+	Data uint16 
 }
 
 type client struct{
+	id uint8
 	conn net.Conn
 	dc_c chan bool
 	talkDone_c chan uint32	
@@ -28,18 +29,28 @@ type client struct{
 
 
 
-func ClientListen(c *client){
+func ClientListen(conn net.Conn, dialer bool){
 //	num_rcvd := 0
 //	num_sent := 0
-
+	var TalkCounter uint32 = 0
+	if role {
+		TalkCounter++
+	}
+	elev_c = make(chan *msg_t)
 	msg_c := make(chan *msg_t)
 	talks_m := make(map[uint32]chan *msg_t)
 
+	var cli client
+	c := &cli
+	c.id = id
+	c.conn = conn
 	c.talkDone_c = make(chan uint32)
 	c.dc_c = make(chan bool)
 
-	//Tcp receiver, passes incoming messages to msg_c
+
 	go TcpListen(c, msg_c)
+
+	
 
 	for {
 		select {
@@ -51,7 +62,7 @@ func ClientListen(c *client){
 					//Notify talks:
 					close(c.dc_c)
 
-					//Distribute his orders (should maybe be done in the talks?)
+					//Distribute his/her orders
 
 					//issue that it returns before talks are finished cleaning up?
 					return
@@ -59,14 +70,19 @@ func ClientListen(c *client){
 				//Notify correct protocol
 				if !notifyTalk(talks_m, newMsg){
 					new_c := make(chan *msg_t)
-					go runProtocol(newMsg, new_c, c)
+					go runProtocol(newMsg, new_c, c, false)
 					talks_m[newMsg.TalkId] = new_c
 				}
 			}
-			case id, ok := <- c.talkDone_c:{
-				if !ok {
-					fmt.Printf("TalkDone channel closed for some odd reason\n")
-				}
+
+			case newMsg := <- elev_c :
+				newMsg.TalkId = TalkCounter
+				new_c := make(chan *msg_t)
+				talks_m[TalkCounter] = new_c
+				go runProtocol(newMsg, new_c, c, true)
+				TalkCounter += 2
+
+			case id := <- c.talkDone_c:{
 				delete(talks_m, id)
 			}
 		}
@@ -114,7 +130,7 @@ func toBytes(data *msg_t) []byte{
 func TcpListen(c *client, msg_c chan<- *msg_t){
 	buf := make([]byte, BUFLEN)
 	for {
-		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		//c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, err := c.conn.Read(buf)
 		if err != nil || n != int(BUFLEN){
 			fmt.Printf("Read failed client %q\n", c.conn.RemoteAddr())
@@ -129,79 +145,204 @@ func TcpListen(c *client, msg_c chan<- *msg_t){
 	}
 }
 
+func ReadInput(){
+	reader := bufio.NewReader(os.Stdin)
+	var msg msg_t
+	msg.Type = CALL
+	msg.ClientId = 0
+	msg.Data = 3
+	for {
+	    fmt.Print("Text to send: ")
+	    text, _ := reader.ReadString('\n')
+	    switch text{
+	    case "add\n":
+	    	elev_c <- &msg
+	    case "complete\n":
+	    	msg.Type = COMPLETE_CALL
+	    	elev_c <- &msg
+	    case "fail\n":
+	    	msg.Type = FAILED_CALL
+	    	elev_c <- &msg
+	    default:
+	    	fmt.Printf("%s\n",text)
+	    	fmt.Printf("Didn't catch test\n")
+	    }
+	}
+}
+
+func UdpListen(){
+	for {
+		// connect to this socket
+		for {
+			
+		}
+
+		var err error
+		var conn net.Conn
+		for i := 0; i < 3; i++{
+			conn, err = net.Dial("tcp", "129.241.187.153:4487")
+			if err == nil {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if err != nil {
+			continue
+		}
+		go ClientListen(conn, true)
+	}
+}
+
+func TcpAccept(){
+	for {
+		ln, err := net.Listen("tcp", ":8080")
+		if err != nil {
+			// handle error
+		}
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				// handle error
+			}
+			go ClientListen(conn, false)
+		}
+	}
+}
+
 
 //placeholder for compilation
-func addOrder(data uint16) chan bool{
-	data = 0
-	c := make(chan bool)
-	return c
+func addOrder(data uint16) {
+	fmt.Printf("Order to be handled by me: %d\n",data)
 }
-func removeOrder() chan uint16{
-	return make(chan uint16)
+
+func CallAccepted(data uint16, id uint8){
+	fmt.Printf("Call acc: %d, %d\n", data, id)
 }
+
+func CallUnhandled(data uint16){
+	fmt.Printf("Call unhandled: %d\n", data)
+}
+
+var elev_c chan *msg_t
+
 
 //flags
 //Message Types
-const COMPLETE uint8 = 200
+const COMPLETE_CALL uint8 = 200
 const ACK uint8 = 201
-const HANDLE_CALL uint8 = 202
-const FAILED uint8 = 203
+const CALL uint8 = 202
+const FAILED_CALL uint8 = 204
 const BUFLEN uint8 = 8
 
-func runProtocol(msg *msg_t, talk_c <-chan *msg_t, c *client){
-	switch msg.Type{
-		case HANDLE_CALL:{
-			HandleCall(msg, talk_c, c)
-			//Legg det over i en egen funksjon prob
-
+func runProtocol(msg *msg_t, talk_c <-chan *msg_t, c *client, outgoing bool){
+	if outgoing {
+		switch msg.Type{
+		case CALL :
+			Call_out(msg, talk_c, c)
+		case COMPLETE_CALL : 
+			CallComplete_out(msg, talk_c, c)
+		case FAILED_CALL :
+			CallFailed_out(msg, talk_c, c)
+		}
+	} else {
+		switch msg.Type{
+		case CALL:
+			Call_in(msg, talk_c, c)
+		case COMPLETE_CALL : 
+			CallComplete_in(msg, talk_c, c)
+		case FAILED_CALL :
+			CallFailed_in(msg, talk_c, c)
 		}
 	}
 }
 
 //Ikke fornøyd med denne måten å gjøre ting på
 //Vil helst at man skal anta at tcp meldinger går gjennom og heller sørge for ack med timeout
-func HandleCall(msg *msg_t, talk_c <-chan *msg_t, c *client){
-	//Keep track of unique msgs sent/rcvd
-	rcvMsgId := msg.MsgId
-	var sndMsgId uint8 = 0
+func Call_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 
-	//Add order to map
-	callStatus_c := addOrder(msg.Data)
-	call := msg.Data
-	//Send ack
-	*msg = msg_t{msg.TalkId, sndMsgId, ACK, 0}
+	addOrder(msg.Data)
+	sendACK(msg, talk_c, c)
+	fmt.Printf("Goroutine ended %d\n", msg.Type)
+}
+
+func Call_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
+
 	send(msg, c)
+	if getACK(msg, talk_c, c) {
+		CallAccepted(msg.Data, c.id)
+	} else {
+		CallUnhandled(msg.Data)
+	}
+	fmt.Printf("Goroutine ended %d\n", msg.Type)
+}
 
-	//Wait for call to be handled / request for new ack if prev failed
+
+
+func CallFailed_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
+	
+	send(msg, c)
+	getACK(msg, talk_c, c)
+	fmt.Printf("Goroutine ended %d\n", msg.Type)
+}
+
+func CallFailed_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
+
+	fmt.Printf("Remove order %d\n", msg.Data)
+	sendACK(msg, talk_c, c)
+	fmt.Printf("Goroutine ended %d\n", msg.Type)
+}
+
+func CallComplete_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
+
+	send(msg, c)
+	getACK(msg, talk_c, c)
+	fmt.Printf("Goroutine ended %d\n", msg.Type)
+}
+
+func CallComplete_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
+
+	fmt.Printf("Remove order %d\n", msg.Data)
+	sendACK(msg, talk_c, c)
+	fmt.Printf("Goroutine ended %d\n", msg.Type)
+}
+
+
+func getACK(msg *msg_t, talk_c <-chan *msg_t, c *client) bool {
 	for {
 		select {
-		case status := <- callStatus_c:
-			if status {
-				*msg = msg_t{msg.TalkId, sndMsgId, COMPLETE, call}
-				sndMsgId++
-				send(msg, c)
-				//Channel gets closed in other end, therefore omit it from select
-				callStatus_c = nil
-			} else {
-				//Call couldn't be completed
-				*msg = msg_t{msg.TalkId, sndMsgId, FAILED, call}
-				sndMsgId++
-				send(msg, c)
-			}
-			//TODO: wait for ack
-		
 		case rcvMsg := <- talk_c: 
-			if rcvMsg.MsgId == rcvMsgId {
-				//Ack not received
-				send(msg, c)
-			} else if rcvMsg.Type == ACK {
-				removeOrder() <- msg.Data
-				return
+			if rcvMsg.Type == ACK {
+				return true
+			} else {
+				fmt.Printf("Talk : %d, Received unexpected message: %d\n", rcvMsg.TalkId, rcvMsg.Type)
 			}
 		case <- c.dc_c :
 			//client dc
-			//TODO - redistribute order
-			return
+			return false
+		case <- time.After(40 * time.Millisecond) :
+			//Ack not received
+			fmt.Printf("Ack not received\n")
+			send(msg, c)
+		}
+	}
+}
+
+func sendACK(msg *msg_t, talk_c <-chan *msg_t, c *client) bool {
+	//Wait for call to be handled / request for new ack if prev failed
+	msg.Type = ACK
+	send(msg, c)
+	for {
+		select {
+		case rcvMsg := <- talk_c: 
+			//Ack not received
+			send(msg, c)
+			fmt.Printf("Talk : %d, Resending: %d\n", rcvMsg.TalkId, rcvMsg.Type)
+		case <- c.dc_c :
+			//client dc
+			return false
+		case <- time.After(100 * time.Millisecond) :
+			//Ack assumed received
+			return true
 		}
 	}
 }
