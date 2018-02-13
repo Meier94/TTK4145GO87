@@ -156,6 +156,10 @@ func TcpListen(c *client, msg_c chan<- *msg_t){
 		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, err := c.conn.Read(buf)
 		if err != nil || n != int(BUFLEN){
+
+			if err, ok := err.(net.Error); ok && err.Timeout() {
+        		fmt.Printf("Timeout caused disconnect\n")
+    		}
 			c.conn.Close()
 			close(msg_c)
 			return
