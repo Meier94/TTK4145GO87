@@ -1,5 +1,11 @@
 package main
 
+/*
+#include "io.h"
+#cgo LDFLAGS: -L . -lcomedi
+*/
+import "C"
+
 import (
 //	"./network/bcast"
 //	"./network/peers"
@@ -8,8 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"strconv"
-//	"time"
-//	"time"
+	"time"
 )
 
 // We define some custom struct to send over the network.
@@ -23,6 +28,21 @@ type HelloMsg struct {
 func main() {
 	// Our id can be anything. Here we pass it on the command line, using
 	//  `go run main.go -id=our_id`
+
+	C.io_init()
+	var i C.int = 0x300
+	for i < 0x310{
+
+		C.io_set_bit(i)
+		i++
+		time.Sleep(300*time.Millisecond)
+	}
+	i = 0x300
+	for i < 0x310{
+
+		C.io_clear_bit(i)
+		i++
+	}
 	var id string
 	flag.StringVar(&id, "id", "", "id of this peer")
 	flag.Parse()
