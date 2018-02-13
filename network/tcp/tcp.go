@@ -32,7 +32,7 @@ type client struct{
 
 var connectionMap map[string]int
 var mapTex *sync.Mutex
-var talkText *sync.Mutex
+var talkTex *sync.Mutex
 var myID uint8
 
 func Init(id uint8){
@@ -60,7 +60,7 @@ func ClientListen(conn net.Conn, dialer bool){
 
 
 	go TcpListen(c, msg_c)
-	go Ping_out(TalkCounter)
+	go Ping_out(myID,TalkCounter, c)
 	TalkCounter+=2
 	
 
@@ -234,8 +234,8 @@ func UdpListen(){
 
 		ip,_,_ := net.SplitHostPort(addr.String())
 
-        if !addToMap(ip) 
-{        	continue
+        if !addToMap(ip) {
+        	continue
         }
 
 
@@ -354,8 +354,9 @@ func runProtocol(msg *msg_t, talk_c <-chan *msg_t, c *client, outgoing bool){
 
 func endTalk(c *client, id uint32){
 	talkTex.Lock()
-	if c.talkDone_c != nil
+	if c.talkDone_c != nil {
 		c.talkDone_c <- id
+	}
 	talkTex.Unlock()
 }
 
@@ -365,7 +366,7 @@ func Ping_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 	run := true
 	for run{
 		select {
-		case rcvMsg := <- talk_c: 
+		case msg := <- talk_c: 
 			if(msg.MsgID != lastID){
 				fmt.Printf("Update received via ping.\n")
 				lastID = msg.MsgID
@@ -386,7 +387,7 @@ func Ping_out(id uint8, talkId uint32, c *client){
 		select {
 		case <- c.dc_c :
 			//client dc
-			return false
+			return
 		case <- time.After(30 * time.Millisecond) :
 			lastID++
 			send(&msg, c)
