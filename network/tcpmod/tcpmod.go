@@ -209,7 +209,7 @@ func UdpListen(){
 }
 
 func UdpBroadcast(){
-	ServerAddr,err := net.ResolveUDPAddr("udp",":5587")
+	ServerAddr,err := net.ResolveUDPAddr("udp","255.255.255.255:5587")
     if err != nil {
         fmt.Println("Error: ",err)
     }
