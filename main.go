@@ -31,13 +31,8 @@ func main() {
 	fmt.Printf("%d\n",idn)
 	tcp.Init(uint8(idn))
 
-	if id == "1" {
-		go tcp.UdpListen()
-
-	}
-	if id == "2" {
-		go tcp.TcpAccept()
-		go tcp.UdpBroadcast()
-	}
+	go tcp.UdpListen()
+	go tcp.TcpAccept()
+	go tcp.UdpBroadcast()
 	tcp.ReadInput()
 }
