@@ -186,7 +186,7 @@ func ReadInput(){
 func addToMap(ip string) bool {
 	mapTex.Lock()
 	_, ok := connectionMap[ip]
-	if !ok {
+	if ok {
 		mapTex.Unlock()
 		return false
 	}
@@ -211,23 +211,24 @@ func UdpListen(){
     defer SerConn.Close()
 	for {
 		// connect to this socket
-		n,addr,err := SerConn.ReadFromUDP(buf)
-        fmt.Println("Received ",string(buf[0:n]), " from ",addr)
+		_,addr,err := SerConn.ReadFromUDP(buf)
+        fmt.Println("Received UDP from id:",buf[0], ", ip: ",addr)
         if err != nil {
             fmt.Println("Error: ",err)
             continue
         }
 
-        if buf[0] > myID {
+        if buf[0] >= myID {
         	continue
         }
+
 
 		ip,_,_ := net.SplitHostPort(addr.String())
 
         if !addToMap(ip) {
         	continue
         }
-        
+
 
 		var conn net.Conn
 		for i := 0; i < 3; i++{
@@ -240,6 +241,7 @@ func UdpListen(){
 		if err != nil {
 			continue
 		}
+		fmt.Printf("Connection established, id: %d\n", buf[0])
 		go ClientListen(conn, true)
 	}
 }
