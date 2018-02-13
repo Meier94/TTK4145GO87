@@ -368,7 +368,6 @@ func Ping_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 		select {
 		case msg := <- talk_c: 
 			if(msg.MsgID != lastID){
-				fmt.Printf("Update received via ping.\n")
 				lastID = msg.MsgID
 			}
 		case <- c.dc_c :
@@ -389,7 +388,7 @@ func Ping_out(id uint8, talkId uint32, c *client){
 			//client dc
 			return
 		case <- time.After(30 * time.Millisecond) :
-			lastID++
+			msg.MsgID++
 			send(&msg, c)
 		}
 	}
