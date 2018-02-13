@@ -17,8 +17,9 @@ import (
 type msg_t struct{
 	TalkId uint32	//talk-id
 	ClientId uint8
+	MsgID uint8
 	Type uint8
-	Data uint16 
+	Data uint16
 }
 
 type client struct{
@@ -31,17 +32,17 @@ type client struct{
 
 var connectionMap map[string]int
 var mapTex *sync.Mutex
+var talkText *sync.Mutex
 var myID uint8
 
 func Init(id uint8){
 	mapTex = &sync.Mutex{}
+	talkTex = &sync.Mutex{}
 	connectionMap = make(map[string]int)
 	myID = id
 }
 
 func ClientListen(conn net.Conn, dialer bool){
-//	num_rcvd := 0
-//	num_sent := 0
 	var TalkCounter uint32 = 0
 	if dialer {
 		TalkCounter++
@@ -59,7 +60,8 @@ func ClientListen(conn net.Conn, dialer bool){
 
 
 	go TcpListen(c, msg_c)
-
+	go Ping_out(TalkCounter)
+	TalkCounter+=2
 	
 
 	for {
@@ -67,12 +69,19 @@ func ClientListen(conn net.Conn, dialer bool){
 			//TcpListen has received a message from client
 			case newMsg, ok := <- msg_c: {
 				if !ok {
+					fmt.Printf("Connection to %s closed.\n",c.conn.RemoteAddr().String())
 					//channel is closed
 					//Client is non responsive
 					//Notify talks:
+					talkTex.Lock()
+					close(c.talkDone_c)
+					c.talkDone_c = nil
+					talkTex.Unlock()
 					close(c.dc_c)
 
-					//Distribute his/her orders
+					//probably iterate through map and close all channels
+
+					//Distribute his/her/its orders
 
 					//issue that it returns before talks are finished cleaning up?
 
@@ -142,10 +151,9 @@ func toBytes(data *msg_t) []byte{
 func TcpListen(c *client, msg_c chan<- *msg_t){
 	buf := make([]byte, BUFLEN)
 	for {
-		//c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, err := c.conn.Read(buf)
 		if err != nil || n != int(BUFLEN){
-			fmt.Printf("Read failed client %q\n", c.conn.RemoteAddr())
 			c.conn.Close()
 			close(msg_c)
 			return
@@ -226,8 +234,8 @@ func UdpListen(){
 
 		ip,_,_ := net.SplitHostPort(addr.String())
 
-        if !addToMap(ip) {
-        	continue
+        if !addToMap(ip) 
+{        	continue
         }
 
 
@@ -317,6 +325,7 @@ const COMPLETE_CALL uint8 = 200
 const ACK uint8 = 201
 const CALL uint8 = 202
 const FAILED_CALL uint8 = 204
+const PING uint8 = 205
 const BUFLEN uint8 = 8
 
 func runProtocol(msg *msg_t, talk_c <-chan *msg_t, c *client, outgoing bool){
@@ -331,12 +340,56 @@ func runProtocol(msg *msg_t, talk_c <-chan *msg_t, c *client, outgoing bool){
 		}
 	} else {
 		switch msg.Type{
-		case CALL:
+		case PING :
+			Ping_in(msg, talk_c, c)
+		case CALL :
 			Call_in(msg, talk_c, c)
 		case COMPLETE_CALL : 
 			CallComplete_in(msg, talk_c, c)
 		case FAILED_CALL :
 			CallFailed_in(msg, talk_c, c)
+		}
+	}
+}
+
+func endTalk(c *client, id uint32){
+	talkTex.Lock()
+	if c.talkDone_c != nil
+		c.talkDone_c <- id
+	talkTex.Unlock()
+}
+
+
+func Ping_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
+	lastID := msg.MsgID
+	run := true
+	for run{
+		select {
+		case rcvMsg := <- talk_c: 
+			if(msg.MsgID != lastID){
+				fmt.Printf("Update received via ping.\n")
+				lastID = msg.MsgID
+			}
+		case <- c.dc_c :
+			//client dc
+			run = false
+		}
+	}
+	endTalk(c,msg.TalkId)
+}
+
+
+func Ping_out(id uint8, talkId uint32, c *client){
+	var lastID uint8 = 0
+	msg := msg_t{talkId, id, lastID, PING, 0}
+	for{
+		select {
+		case <- c.dc_c :
+			//client dc
+			return false
+		case <- time.After(30 * time.Millisecond) :
+			lastID++
+			send(&msg, c)
 		}
 	}
 }
@@ -347,6 +400,7 @@ func Call_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 
 	addOrder(msg.Data)
 	sendACK(msg, talk_c, c)
+	endTalk(c,msg.TalkId)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
@@ -358,6 +412,7 @@ func Call_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
 	} else {
 		CallUnhandled(msg.Data)
 	}
+	endTalk(c,msg.TalkId)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
@@ -367,6 +422,7 @@ func CallFailed_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
 	
 	send(msg, c)
 	getACK(msg, talk_c, c)
+	endTalk(c,msg.TalkId)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
@@ -374,6 +430,7 @@ func CallFailed_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 
 	fmt.Printf("Remove order %d\n", msg.Data)
 	sendACK(msg, talk_c, c)
+	endTalk(c,msg.TalkId)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
@@ -381,6 +438,7 @@ func CallComplete_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
 
 	send(msg, c)
 	getACK(msg, talk_c, c)
+	endTalk(c,msg.TalkId)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
@@ -388,6 +446,7 @@ func CallComplete_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 
 	fmt.Printf("Remove order %d\n", msg.Data)
 	sendACK(msg, talk_c, c)
+	endTalk(c,msg.TalkId)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
