@@ -326,7 +326,7 @@ const ACK uint8 = 201
 const CALL uint8 = 202
 const FAILED_CALL uint8 = 204
 const PING uint8 = 205
-const BUFLEN uint8 = 8
+const BUFLEN uint8 = 9
 
 func runProtocol(msg *msg_t, talk_c <-chan *msg_t, c *client, outgoing bool){
 	if outgoing {
