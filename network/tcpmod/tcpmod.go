@@ -33,7 +33,7 @@ func ClientListen(conn net.Conn, dialer bool){
 //	num_rcvd := 0
 //	num_sent := 0
 	var TalkCounter uint32 = 0
-	if role {
+	if dialer {
 		TalkCounter++
 	}
 	elev_c = make(chan *msg_t)
@@ -42,7 +42,7 @@ func ClientListen(conn net.Conn, dialer bool){
 
 	var cli client
 	c := &cli
-	c.id = id
+	c.id = 0
 	c.conn = conn
 	c.talkDone_c = make(chan uint32)
 	c.dc_c = make(chan bool)
@@ -171,16 +171,31 @@ func ReadInput(){
 }
 
 func UdpListen(){
+	Addr,err := net.ResolveUDPAddr("udp",":5587")
+    if err != nil {
+    	panic(err)
+    }
+	SerConn, err := net.ListenUDP("udp", Addr)
+    if err != nil {
+        fmt.Printf("Some error %v\n", err)
+        return
+    }
+    buf := make([]byte, 1024)
+    defer SerConn.Close()
 	for {
 		// connect to this socket
-		for {
-			
-		}
+		n,addr,err := SerConn.ReadFromUDP(buf)
+        fmt.Println("Received ",string(buf[0:n]), " from ",addr)
+ 
+        if err != nil {
+            fmt.Println("Error: ",err)
+            continue
+        }
 
-		var err error
 		var conn net.Conn
+		ip,_,_ := net.SplitHostPort(addr.String())
 		for i := 0; i < 3; i++{
-			conn, err = net.Dial("tcp", "129.241.187.153:4487")
+			conn, err = net.Dial("tcp", ip+":4487")
 			if err == nil {
 				break
 			}
@@ -193,17 +208,47 @@ func UdpListen(){
 	}
 }
 
+func UdpBroadcast(){
+	ServerAddr,err := net.ResolveUDPAddr("udp",":5587")
+    if err != nil {
+        fmt.Println("Error: ",err)
+    }
+ 
+    LocalAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+    if err != nil {
+        fmt.Println("Error: ",err)
+    }
+ 
+    Conn, err := net.DialUDP("udp", LocalAddr, ServerAddr)
+    if err != nil {
+        fmt.Println("Error: ",err)
+    }
+ 
+    defer Conn.Close()
+    for {
+        buf := make([]byte,1)
+        _,err := Conn.Write(buf)
+        if err != nil {
+            fmt.Println(err)
+        }
+        time.Sleep(time.Second * 1)
+    }
+}
+
 func TcpAccept(){
 	for {
-		ln, err := net.Listen("tcp", ":8080")
+		ln, err := net.Listen("tcp", ":4487")
 		if err != nil {
 			// handle error
+			continue
 		}
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
 				// handle error
+				continue
 			}
+			fmt.Printf("Connected to %s\n", conn.RemoteAddr())
 			go ClientListen(conn, false)
 		}
 	}

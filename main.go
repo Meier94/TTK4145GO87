@@ -5,11 +5,11 @@ import (
 	"./network/localip"
 //	"./network/peers"
 	"./network/tcpmod"
-	"net"
+//	"net"
 	"flag"
 	"fmt"
 	"os"
-	"time"
+//	"time"
 //	"time"
 )
 
@@ -46,25 +46,12 @@ func main() {
 	}
 	
 	if id == "1" {
-		var conn net.Conn
-		var err error
-		for {
-			conn, err = net.Dial("tcp", "129.241.187.78:4487")
-			if err == nil {
-				break
-			}
-			//fmt.Println(err)
-			time.Sleep(10 * time.Millisecond)
-		}
-		go tcpmod.ClientListen(conn, 2, false)
+		go tcpmod.UdpListen()
 
 	}
 	if id == "2" {
-		// listen on all interfaces
-		ln, _ := net.Listen("tcp", ":4487")
-		// accept connection on port
-		conn, _ := ln.Accept()
-		go tcpmod.ClientListen(conn, 1, true)
+		go tcpmod.TcpAccept()
+		go tcpmod.UdpBroadcast()
 	}
 	tcpmod.ReadInput()
 }
