@@ -86,6 +86,8 @@ func ClientListen(conn net.Conn, dialer bool){
 					//issue that it returns before talks are finished cleaning up?
 
 					//remove itself from map
+					
+					removeFromMap(c.conn)
 					return
 				}
 				//Notify correct protocol
@@ -201,6 +203,13 @@ func addToMap(ip string) bool {
 	connectionMap[ip] = 1
 	mapTex.Unlock()
 	return true
+}
+
+func removeFromMap(conn net.Conn){
+	ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
+	mapTex.Lock()
+	delete(connectionMap, ip)
+	mapTex.Unlock()
 }
 
 
