@@ -212,7 +212,8 @@ func UdpListen(){
 	for {
 		// connect to this socket
 		_,addr,err := SerConn.ReadFromUDP(buf)
-        fmt.Println("Received UDP from id:",buf[0], ", ip: ",addr)
+        
+        //fmt.Println("Received UDP from id:",buf[0], ", ip: ",addr)
         if err != nil {
             fmt.Println("Error: ",err)
             continue
