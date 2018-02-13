@@ -2,13 +2,12 @@ package main
 
 import (
 //	"./network/bcast"
-	"./network/localip"
 //	"./network/peers"
-	"./network/tcpmod"
+	"./network/tcp"
 //	"net"
 	"flag"
 	"fmt"
-	"os"
+	"strconv"
 //	"time"
 //	"time"
 )
@@ -27,31 +26,18 @@ func main() {
 	var id string
 	flag.StringVar(&id, "id", "", "id of this peer")
 	flag.Parse()
-
-	// ... or alternatively, we can use the local IP address.
-	// (But since we can run multiple programs on the same PC, we also append the
-	//  process ID)
-	var localIP string
-	if id == "" {
-		localIP, err := localip.LocalIP()
-		if err != nil {
-			fmt.Println(err)
-			localIP = "DISCONNECTED"
-		}
-		id = fmt.Sprintf("peer-%s-%d", localIP, os.Getpid())
-	}
-	localIP, err := localip.LocalIP()
-	if err == nil {
-		println(localIP)
-	}
 	
+	idn,_:=strconv.Atoi(id)
+	fmt.Printf("%d\n",idn)
+	tcp.Init(uint8(idn))
+
 	if id == "1" {
-		go tcpmod.UdpListen()
+		go tcp.UdpListen()
 
 	}
 	if id == "2" {
-		go tcpmod.TcpAccept()
-		go tcpmod.UdpBroadcast()
+		go tcp.TcpAccept()
+		go tcp.UdpBroadcast()
 	}
-	tcpmod.ReadInput()
+	tcp.ReadInput()
 }

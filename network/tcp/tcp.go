@@ -1,4 +1,4 @@
-package tcpmod
+package tcp
 
 import (
 	"net"
@@ -10,6 +10,7 @@ import (
 //	"io"
 	"bytes"
 	"encoding/binary"
+	"sync"
 )
 
 //felt må ha stor forbokstav for å kunne bli konvertert fra []byte
@@ -28,6 +29,15 @@ type client struct{
 }
 
 
+var connectionMap map[string]int
+var mapTex *sync.Mutex
+var myID uint8
+
+func Init(id uint8){
+	mapTex = &sync.Mutex{}
+	connectionMap = make(map[string]int)
+	myID = id
+}
 
 func ClientListen(conn net.Conn, dialer bool){
 //	num_rcvd := 0
@@ -65,6 +75,8 @@ func ClientListen(conn net.Conn, dialer bool){
 					//Distribute his/her orders
 
 					//issue that it returns before talks are finished cleaning up?
+
+					//remove itself from map
 					return
 				}
 				//Notify correct protocol
@@ -170,7 +182,22 @@ func ReadInput(){
 	}
 }
 
+
+func addToMap(ip string) bool {
+	mapTex.Lock()
+	_, ok := connectionMap[ip]
+	if !ok {
+		mapTex.Unlock()
+		return false
+	}
+	connectionMap[ip] = 1
+	mapTex.Unlock()
+	return true
+}
+
+
 func UdpListen(){
+
 	Addr,err := net.ResolveUDPAddr("udp",":55087")
     if err != nil {
     	panic(err)
@@ -186,14 +213,23 @@ func UdpListen(){
 		// connect to this socket
 		n,addr,err := SerConn.ReadFromUDP(buf)
         fmt.Println("Received ",string(buf[0:n]), " from ",addr)
- 
         if err != nil {
             fmt.Println("Error: ",err)
             continue
         }
 
-		var conn net.Conn
+        if buf[0] > myID {
+        	continue
+        }
+
 		ip,_,_ := net.SplitHostPort(addr.String())
+
+        if !addToMap(ip) {
+        	continue
+        }
+        
+
+		var conn net.Conn
 		for i := 0; i < 3; i++{
 			conn, err = net.Dial("tcp", ip+":4487")
 			if err == nil {
@@ -222,7 +258,7 @@ func UdpBroadcast(){
  
     defer Conn.Close()
     for {
-        buf := make([]byte,1)
+        buf := []byte{myID}
         _,err := Conn.Write(buf)
         if err != nil {
             fmt.Println(err)
@@ -244,6 +280,11 @@ func TcpAccept(){
 				// handle error
 				continue
 			}
+			ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
+			if !addToMap(ip) {
+	        	continue
+	        }
+			
 			fmt.Printf("Connected to %s\n", conn.RemoteAddr())
 			go ClientListen(conn, false)
 		}
