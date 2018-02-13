@@ -171,7 +171,7 @@ func ReadInput(){
 }
 
 func UdpListen(){
-	Addr,err := net.ResolveUDPAddr("udp",":5587")
+	Addr,err := net.ResolveUDPAddr("udp",":55087")
     if err != nil {
     	panic(err)
     }
@@ -209,17 +209,13 @@ func UdpListen(){
 }
 
 func UdpBroadcast(){
-	ServerAddr,err := net.ResolveUDPAddr("udp","255.255.255.255:5587")
+	ServerAddr,err := net.ResolveUDPAddr("udp","255.255.255.255:55087")
     if err != nil {
         fmt.Println("Error: ",err)
     }
+
  
-    LocalAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-    if err != nil {
-        fmt.Println("Error: ",err)
-    }
- 
-    Conn, err := net.DialUDP("udp", LocalAddr, ServerAddr)
+    Conn, err := net.DialUDP("udp", nil, ServerAddr)
     if err != nil {
         fmt.Println("Error: ",err)
     }
