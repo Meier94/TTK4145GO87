@@ -1,5 +1,17 @@
 #pragma once
 
+//in port 1
+#define PORT_1_SUBDEVICE        2
+#define PORT_1_CHANNEL_OFFSET   0
+#define PORT_1_DIRECTION        COMEDI_INPUT
+#define BUTTON_DOWN2            (0x200+0)
+#define BUTTON_UP3              (0x200+1)
+#define BUTTON_DOWN3            (0x200+2)
+#define BUTTON_DOWN4            (0x200+3)
+#define SENSOR_FLOOR1           (0x200+4)
+#define SENSOR_FLOOR2           (0x200+5)
+#define SENSOR_FLOOR3           (0x200+6)
+#define SENSOR_FLOOR4           (0x200+7)
 
 //in port 4
 #define PORT_4_SUBDEVICE        3
@@ -14,18 +26,8 @@
 #define BUTTON_UP1              (0x300+17)
 #define BUTTON_UP2              (0x300+16)
 
-//in port 1
-#define PORT_1_SUBDEVICE        2
-#define PORT_1_CHANNEL_OFFSET   0
-#define PORT_1_DIRECTION        COMEDI_INPUT
-#define BUTTON_DOWN2            (0x200+0)
-#define BUTTON_UP3              (0x200+1)
-#define BUTTON_DOWN3            (0x200+2)
-#define BUTTON_DOWN4            (0x200+3)
-#define SENSOR_FLOOR1           (0x200+4)
-#define SENSOR_FLOOR2           (0x200+5)
-#define SENSOR_FLOOR3           (0x200+6)
-#define SENSOR_FLOOR4           (0x200+7)
+
+
 
 //out port 3
 #define PORT_3_SUBDEVICE        3
@@ -51,6 +53,8 @@
 #define LIGHT_DOOR_OPEN         (0x300+3)
 #define LIGHT_FLOOR_IND2        (0x300+1)
 #define LIGHT_FLOOR_IND1        (0x300+0)
+
+
 
 //out port 0
 #define MOTOR                   (0x100+0)
