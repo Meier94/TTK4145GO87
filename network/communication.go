@@ -1,4 +1,4 @@
-package tcp
+package com
 
 import (
 	"net"
@@ -30,7 +30,7 @@ type client struct{
 }
 
 
-var connectionMap map[string]int
+var connections_m map[string]int
 var mapTex *sync.Mutex
 var talkTex *sync.Mutex
 var myID uint8
@@ -38,7 +38,7 @@ var myID uint8
 func Init(id uint8){
 	mapTex = &sync.Mutex{}
 	talkTex = &sync.Mutex{}
-	connectionMap = make(map[string]int)
+	connections_m = make(map[string]int)
 	myID = id
 }
 
@@ -51,12 +51,8 @@ func ClientListen(conn net.Conn, dialer bool){
 	msg_c := make(chan *msg_t)
 	talks_m := make(map[uint32]chan *msg_t)
 
-	var cli client
+	cli := client(0,conn,make(chan uint32), make(chan bool))
 	c := &cli
-	c.id = 0
-	c.conn = conn
-	c.talkDone_c = make(chan uint32)
-	c.dc_c = make(chan bool)
 
 
 	go TcpListen(c, msg_c)
@@ -171,6 +167,7 @@ func TcpListen(c *client, msg_c chan<- *msg_t){
 	}
 }
 
+
 func ReadInput(){
 	reader := bufio.NewReader(os.Stdin)
 	var msg msg_t
@@ -199,12 +196,12 @@ func ReadInput(){
 
 func addToMap(ip string) bool {
 	mapTex.Lock()
-	_, ok := connectionMap[ip]
+	_, ok := connections_m[ip]
 	if ok {
 		mapTex.Unlock()
 		return false
 	}
-	connectionMap[ip] = 1
+	connections_m[ip] = 1
 	mapTex.Unlock()
 	return true
 }
@@ -212,7 +209,7 @@ func addToMap(ip string) bool {
 func removeFromMap(conn net.Conn){
 	ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
 	mapTex.Lock()
-	delete(connectionMap, ip)
+	delete(connections_m, ip)
 	mapTex.Unlock()
 }
 
