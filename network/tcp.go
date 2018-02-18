@@ -124,7 +124,10 @@ func notifyTalk(talks_m map[uint32]chan *msg_t, msg *msg_t) bool{
 
 func send(msg *msg_t, c *client){
 	buf := toBytes(msg)
-	c.conn.Write(buf)
+	_, err := c.conn.Write(buf)
+	if err != nil {
+		fmt.Printf("failure sending message\n")
+	}
 }
 
 
