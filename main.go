@@ -29,10 +29,10 @@ func main() {
 	
 	idn,_:=strconv.Atoi(id)
 	fmt.Printf("%d\n",idn)
-	tcp.Init(uint8(idn))
+	com.Init(uint8(idn))
 
-	go tcp.UdpListen()
-	go tcp.TcpAccept()
-	go tcp.UdpBroadcast()
+	go com.UdpListen()
+	go com.TcpAccept()
+	go com.UdpBroadcast()
 	tcp.ReadInput()
 }

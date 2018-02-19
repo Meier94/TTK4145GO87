@@ -1,34 +1,36 @@
 package com
 
 import (
+	"../statemap"
 	"net"
 	"fmt"
 	"bufio"
 	"os"
-//	"strings"
 	"time"
-//	"io"
 	"bytes"
 	"encoding/binary"
 	"sync"
 )
 
 //felt må ha stor forbokstav for å kunne bli konvertert fra []byte
-type msg_t struct{
-	TalkId uint32	//talk-id
-	ClientId uint8
+type Msg_t struct{
+	TalkId uint32
+	ClientID uint8
 	MsgID uint8
 	Type uint8
-	Data uint16
+	Evt sm.Evt
 }
 
 type client struct{
 	id uint8
+	smIndex int16
 	conn net.Conn
 	dc_c chan bool
-	talkDone_c chan uint32	
+	talkDone_c chan uint32
+	msg_c chan *Msg_t
+	evt_c chan *sm.Evt
+	talks_m map[uint32]chan *Msg_t
 }
-
 
 var connections_m map[string]int
 var mapTex *sync.Mutex
@@ -42,20 +44,67 @@ func Init(id uint8){
 	myID = id
 }
 
-func ClientListen(conn net.Conn, dialer bool){
+//flags
+//Message Types
+const ACK uint8 = 201
+const CALL uint8 = 202
+const PING uint8 = 205
+const INTRO uint8 = 206
+const EVT uint8 = 207
+const BUFLEN uint8 = 13
+
+
+func ClientInit(conn net.Conn){
+	msg := Msg_t{ClientID: myID, Type: INTRO}
+	status := &msg.Evt
+	status.Floor, status.Target, status.Stuck = sm.GetState(0)
+	send(&msg, conn)
+
+	intro := TcpRead(conn)
+	if intro == nil || intro.Type != INTRO {
+		ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
+		removeFromMap(ip)
+		conn.Close()
+		return
+	}
+	status = &intro.Evt
+
+	var cli client
+	cli.id 			= intro.ClientID
+	cli.conn 		= conn
+	cli.talkDone_c  = make(chan uint32)
+	cli.dc_c 		= make(chan bool)
+	cli.evt_c 		= make(chan *sm.Evt)
+	cli.msg_c 		= make(chan *Msg_t)
+	cli.talks_m 	= make(map[uint32]chan *Msg_t)
+	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
+
+	go ClientListen(&cli)
+}
+
+func closeClient(c *client){
+	fmt.Printf("Connection to %s closed.\n",c.conn.RemoteAddr().String())
+
+	sm.RemoveNode(c.smIndex)
+	talkTex.Lock()
+	close(c.talkDone_c)
+	c.talkDone_c = nil
+	talkTex.Unlock()
+	close(c.dc_c)
+
+	//issue that it returns before talks are finished cleaning up?
+	//remove itself from map
+	ip,_,_ := net.SplitHostPort(c.conn.RemoteAddr().String())
+	removeFromMap(ip)
+}
+
+func ClientListen(c *client){
 	var TalkCounter uint32 = 0
-	if dialer {
+	if myID < c.id {
 		TalkCounter++
 	}
-	elev_c = make(chan *msg_t)
-	msg_c := make(chan *msg_t)
-	talks_m := make(map[uint32]chan *msg_t)
 
-	cli := client(0,conn,make(chan uint32), make(chan bool))
-	c := &cli
-
-
-	go TcpListen(c, msg_c)
+	go TcpListen(c, c.msg_c)
 	go Ping_out(myID,TalkCounter, c)
 	TalkCounter+=2
 	
@@ -63,52 +112,35 @@ func ClientListen(conn net.Conn, dialer bool){
 	for {
 		select {
 			//TcpListen has received a message from client
-			case newMsg, ok := <- msg_c: {
+			case newMsg, ok := <- c.msg_c: {
 				if !ok {
-					fmt.Printf("Connection to %s closed.\n",c.conn.RemoteAddr().String())
-					//channel is closed
 					//Client is non responsive
-					//Notify talks:
-					talkTex.Lock()
-					close(c.talkDone_c)
-					c.talkDone_c = nil
-					talkTex.Unlock()
-					close(c.dc_c)
-
-					//probably iterate through map and close all channels
-
-					//Distribute his/her/its orders
-
-					//issue that it returns before talks are finished cleaning up?
-
-					//remove itself from map
-					
-					removeFromMap(c.conn)
+					closeClient(c)
 					return
 				}
 				//Notify correct protocol
-				if !notifyTalk(talks_m, newMsg){
-					new_c := make(chan *msg_t)
+				if !notifyTalk(c.talks_m, newMsg){
+					new_c := make(chan *Msg_t)
 					go runProtocol(newMsg, new_c, c, false)
-					talks_m[newMsg.TalkId] = new_c
+					c.talks_m[newMsg.TalkId] = new_c
 				}
 			}
 
-			case newMsg := <- elev_c :
-				newMsg.TalkId = TalkCounter
-				new_c := make(chan *msg_t)
-				talks_m[TalkCounter] = new_c
-				go runProtocol(newMsg, new_c, c, true)
+			case evt := <- c.evt_c :
+				newMsg := Msg_t{TalkId: TalkCounter, Type: EVT, Evt: *evt}
+				new_c := make(chan *Msg_t)
+				c.talks_m[TalkCounter] = new_c
+				go runProtocol(&newMsg, new_c, c, true)
 				TalkCounter += 2
 
 			case id := <- c.talkDone_c:{
-				delete(talks_m, id)
+				delete(c.talks_m, id)
 			}
 		}
 	}
 }
 
-func notifyTalk(talks_m map[uint32]chan *msg_t, msg *msg_t) bool{
+func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 	recvChan := talks_m[msg.TalkId]
 	if recvChan == nil {
 		return false
@@ -118,14 +150,14 @@ func notifyTalk(talks_m map[uint32]chan *msg_t, msg *msg_t) bool{
 }
 
 
-func send(msg *msg_t, c *client){
+func send(msg *Msg_t, conn net.Conn){
 	buf := toBytes(msg)
-	c.conn.Write(buf)
+	conn.Write(buf)
 }
 
 
-func toMsg(data []byte) *msg_t{
-	var msg msg_t
+func toMsg(data []byte) *Msg_t{
+	var msg Msg_t
 	buf := bytes.NewReader(data)
 	err := binary.Read(buf, binary.BigEndian, &msg)
 	if err != nil {
@@ -135,7 +167,7 @@ func toMsg(data []byte) *msg_t{
 }
 
 
-func toBytes(data *msg_t) []byte{
+func toBytes(data *Msg_t) []byte{
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, data)
 	if err != nil {
@@ -145,8 +177,7 @@ func toBytes(data *msg_t) []byte{
 }
 
 
-//Ikke testet.
-func TcpListen(c *client, msg_c chan<- *msg_t){
+func TcpListen(c *client, msg_c chan<- *Msg_t){
 	buf := make([]byte, BUFLEN)
 	for {
 		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
@@ -167,13 +198,30 @@ func TcpListen(c *client, msg_c chan<- *msg_t){
 	}
 }
 
+func TcpRead(conn net.Conn) *Msg_t{
+	buf := make([]byte, BUFLEN)
+	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	n, err := conn.Read(buf)
+	if err != nil || n != int(BUFLEN){
+
+		if err, ok := err.(net.Error); ok && err.Timeout() {
+    		fmt.Printf("Tcp read timed out\n")
+		} else {
+			fmt.Printf("Tcp read failed\n")
+		}
+		conn.Close()
+		return nil
+	}
+	msg := toMsg(buf)
+	return msg
+}
+
 
 func ReadInput(){
 	reader := bufio.NewReader(os.Stdin)
-	var msg msg_t
+	var msg Msg_t
 	msg.Type = CALL
-	msg.ClientId = 0
-	msg.Data = 3
+	msg.ClientID = 0
 	for {
 	    fmt.Print("Text to send: ")
 	    text, _ := reader.ReadString('\n')
@@ -181,10 +229,10 @@ func ReadInput(){
 	    case "add\n":
 	    	elev_c <- &msg
 	    case "complete\n":
-	    	msg.Type = COMPLETE_CALL
+	    	msg.Type = EVT
 	    	elev_c <- &msg
 	    case "fail\n":
-	    	msg.Type = FAILED_CALL
+	    	msg.Type = PING
 	    	elev_c <- &msg
 	    default:
 	    	fmt.Printf("%s\n",text)
@@ -206,8 +254,7 @@ func addToMap(ip string) bool {
 	return true
 }
 
-func removeFromMap(conn net.Conn){
-	ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
+func removeFromMap(ip string){
 	mapTex.Lock()
 	delete(connections_m, ip)
 	mapTex.Unlock()
@@ -241,13 +288,11 @@ func UdpListen(){
         	continue
         }
 
-
 		ip,_,_ := net.SplitHostPort(addr.String())
 
         if !addToMap(ip) {
         	continue
         }
-
 
 		var conn net.Conn
 		for i := 0; i < 3; i++{
@@ -258,10 +303,11 @@ func UdpListen(){
 			time.Sleep(10 * time.Millisecond)
 		}
 		if err != nil {
+			removeFromMap(ip)
 			continue
 		}
 		fmt.Printf("Connection established, id: %d\n", buf[0])
-		go ClientListen(conn, true)
+		go ClientInit(conn)
 	}
 }
 
@@ -307,7 +353,7 @@ func TcpAccept(){
 	        }
 			
 			fmt.Printf("Connected to %s\n", conn.RemoteAddr())
-			go ClientListen(conn, false)
+			go ClientInit(conn)
 		}
 	}
 }
@@ -326,19 +372,11 @@ func CallUnhandled(data uint16){
 	fmt.Printf("Call unhandled: %d\n", data)
 }
 
-var elev_c chan *msg_t
+var elev_c chan *Msg_t
 
 
-//flags
-//Message Types
-const COMPLETE_CALL uint8 = 200
-const ACK uint8 = 201
-const CALL uint8 = 202
-const FAILED_CALL uint8 = 204
-const PING uint8 = 205
-const BUFLEN uint8 = 9
-
-func runProtocol(msg *msg_t, talk_c <-chan *msg_t, c *client, outgoing bool){
+//rewrite
+func runProtocol(msg *Msg_t, talk_c <-chan *Msg_t, c *client, outgoing bool){
 	if outgoing {
 		switch msg.Type{
 		case CALL :
@@ -371,7 +409,7 @@ func endTalk(c *client, id uint32){
 }
 
 
-func Ping_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
+func Ping_in(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 	lastID := msg.MsgID
 	run := true
 	for run{
@@ -379,6 +417,7 @@ func Ping_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 		case msg := <- talk_c: 
 			if(msg.MsgID != lastID){
 				lastID = msg.MsgID
+				//notify sm
 			}
 		case <- c.dc_c :
 			//client dc
@@ -391,7 +430,7 @@ func Ping_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 
 func Ping_out(id uint8, talkId uint32, c *client){
 	var lastID uint8 = 0
-	msg := msg_t{talkId, id, lastID, PING, 0}
+	msg := Msg_t{talkId, id, lastID, PING, 0}
 	for{
 		select {
 		case <- c.dc_c :
@@ -399,14 +438,14 @@ func Ping_out(id uint8, talkId uint32, c *client){
 			return
 		case <- time.After(30 * time.Millisecond) :
 			msg.MsgID++
-			send(&msg, c)
+			send(&msg, c.conn)
 		}
 	}
 }
 
 //Ikke fornøyd med denne måten å gjøre ting på
 //Vil helst at man skal anta at tcp meldinger går gjennom og heller sørge for ack med timeout
-func Call_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
+func Call_in(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
 	addOrder(msg.Data)
 	sendACK(msg, talk_c, c)
@@ -414,9 +453,9 @@ func Call_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
-func Call_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
+func Call_out(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
-	send(msg, c)
+	send(msg, c.conn)
 	if getACK(msg, talk_c, c) {
 		CallAccepted(msg.Data, c.id)
 	} else {
@@ -428,15 +467,15 @@ func Call_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
 
 
 
-func CallFailed_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
+func CallFailed_out(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 	
-	send(msg, c)
+	send(msg, c.conn)
 	getACK(msg, talk_c, c)
 	endTalk(c,msg.TalkId)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
-func CallFailed_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
+func CallFailed_in(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
 	fmt.Printf("Remove order %d\n", msg.Data)
 	sendACK(msg, talk_c, c)
@@ -444,15 +483,15 @@ func CallFailed_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
-func CallComplete_out(msg *msg_t, talk_c <-chan *msg_t, c *client){
+func CallComplete_out(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
-	send(msg, c)
+	send(msg, c.conn)
 	getACK(msg, talk_c, c)
 	endTalk(c,msg.TalkId)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
-func CallComplete_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
+func CallComplete_in(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
 	fmt.Printf("Remove order %d\n", msg.Data)
 	sendACK(msg, talk_c, c)
@@ -461,7 +500,7 @@ func CallComplete_in(msg *msg_t, talk_c <-chan *msg_t, c *client){
 }
 
 
-func getACK(msg *msg_t, talk_c <-chan *msg_t, c *client) bool {
+func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	for {
 		select {
 		case rcvMsg := <- talk_c: 
@@ -476,20 +515,20 @@ func getACK(msg *msg_t, talk_c <-chan *msg_t, c *client) bool {
 		case <- time.After(40 * time.Millisecond) :
 			//Ack not received
 			fmt.Printf("Ack not received\n")
-			send(msg, c)
+			send(msg, c.conn)
 		}
 	}
 }
 
-func sendACK(msg *msg_t, talk_c <-chan *msg_t, c *client) bool {
+func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	//Wait for call to be handled / request for new ack if prev failed
 	msg.Type = ACK
-	send(msg, c)
+	send(msg, c.conn)
 	for {
 		select {
 		case rcvMsg := <- talk_c: 
 			//Ack not received
-			send(msg, c)
+			send(msg, c.conn)
 			fmt.Printf("Talk : %d, Resending: %d\n", rcvMsg.TalkId, rcvMsg.Type)
 		case <- c.dc_c :
 			//client dc

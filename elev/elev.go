@@ -6,14 +6,15 @@ package elev
 import "C"
 
 import (
+	"../statemap"
 	"time"
 	"fmt"
 )
 
-const UP int = 0
-const DOWN int = 1
-const CAB int = 2
-const STOP int = 3
+const UP uint8 = 0
+const DOWN uint8 = 1
+const CAB uint = 2
+const STOP uint8 = 3
 
 const idle_s = 0
 const init_s = 1
@@ -72,8 +73,8 @@ func set_motor(dir uint8){
 }
 
 
-func evtButtonPressed(buttonType uint8, floor uint8){
-	if Standalone()
+func evtButtonPressed(floor uint8, buttonType uint8){
+	sm.DelegateButtonPress(floor, buttonType)
 }
 
 
