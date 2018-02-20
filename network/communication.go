@@ -4,8 +4,6 @@ import (
 	"../statemap"
 	"net"
 	"fmt"
-	"bufio"
-	"os"
 	"time"
 	"bytes"
 	"encoding/binary"
@@ -14,9 +12,8 @@ import (
 
 //felt må ha stor forbokstav for å kunne bli konvertert fra []byte
 type Msg_t struct{
-	TalkId uint32
+	TalkID uint32
 	ClientID uint8
-	MsgID uint8
 	Type uint8
 	Evt sm.Evt
 }
@@ -46,12 +43,12 @@ func Init(id uint8){
 
 //flags
 //Message Types
-const ACK uint8 = 201
-const CALL uint8 = 202
-const PING uint8 = 205
-const INTRO uint8 = 206
-const EVT uint8 = 207
-const BUFLEN uint8 = 13
+const ACK uint8 = 200
+const PING uint8 = 201
+const INTRO uint8 = 202
+const EVT uint8 = 203
+
+const BUFLEN uint8 = 12
 
 
 func ClientInit(conn net.Conn){
@@ -105,7 +102,7 @@ func ClientListen(c *client){
 	}
 
 	go TcpListen(c, c.msg_c)
-	go Ping_out(myID,TalkCounter, c)
+	go Ping_out(TalkCounter, c)
 	TalkCounter+=2
 	
 
@@ -121,16 +118,16 @@ func ClientListen(c *client){
 				//Notify correct protocol
 				if !notifyTalk(c.talks_m, newMsg){
 					new_c := make(chan *Msg_t)
-					go runProtocol(newMsg, new_c, c, false)
-					c.talks_m[newMsg.TalkId] = new_c
+					go recvEvt(newMsg, new_c, c)
+					c.talks_m[newMsg.TalkID] = new_c
 				}
 			}
 
 			case evt := <- c.evt_c :
-				newMsg := Msg_t{TalkId: TalkCounter, Type: EVT, Evt: *evt}
+				newMsg := &Msg_t{TalkID: TalkCounter, Type: EVT, Evt: *evt}
 				new_c := make(chan *Msg_t)
 				c.talks_m[TalkCounter] = new_c
-				go runProtocol(&newMsg, new_c, c, true)
+				go sendEvt(newMsg, new_c, c)
 				TalkCounter += 2
 
 			case id := <- c.talkDone_c:{
@@ -141,7 +138,7 @@ func ClientListen(c *client){
 }
 
 func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
-	recvChan := talks_m[msg.TalkId]
+	recvChan := talks_m[msg.TalkID]
 	if recvChan == nil {
 		return false
 	}
@@ -217,31 +214,6 @@ func TcpRead(conn net.Conn) *Msg_t{
 }
 
 
-func ReadInput(){
-	reader := bufio.NewReader(os.Stdin)
-	var msg Msg_t
-	msg.Type = CALL
-	msg.ClientID = 0
-	for {
-	    fmt.Print("Text to send: ")
-	    text, _ := reader.ReadString('\n')
-	    switch text{
-	    case "add\n":
-	    	elev_c <- &msg
-	    case "complete\n":
-	    	msg.Type = EVT
-	    	elev_c <- &msg
-	    case "fail\n":
-	    	msg.Type = PING
-	    	elev_c <- &msg
-	    default:
-	    	fmt.Printf("%s\n",text)
-	    	fmt.Printf("Didn't catch test\n")
-	    }
-	}
-}
-
-
 func addToMap(ip string) bool {
 	mapTex.Lock()
 	_, ok := connections_m[ip]
@@ -260,91 +232,98 @@ func removeFromMap(ip string){
 	mapTex.Unlock()
 }
 
+func perror(err error, msg string){
+	if err != nil {
+		fmt.Println(msg)
+		panic(err)
+	}
+}
+
+func testErr(err error, msg string) bool {
+	if err != nil {
+		fmt.Println(msg,err)
+		return true
+	}
+	return false
+}
+
+
 
 func UdpListen(){
 
 	Addr,err := net.ResolveUDPAddr("udp",":55087")
-    if err != nil {
-    	panic(err)
-    }
+    perror(err, "Couldn't resolve UDP listen")
+
 	SerConn, err := net.ListenUDP("udp", Addr)
-    if err != nil {
-        fmt.Printf("Some error %v\n", err)
-        return
-    }
+    perror(err, "Couldn't listen to udp")
+
     buf := make([]byte, 1024)
     defer SerConn.Close()
 	for {
 		// connect to this socket
 		_,addr,err := SerConn.ReadFromUDP(buf)
         
-        //fmt.Println("Received UDP from id:",buf[0], ", ip: ",addr)
-        if err != nil {
-            fmt.Println("Error: ",err)
+        if testErr(err, "UDP read failed") || buf[0] >= myID {
             continue
         }
 
-        if buf[0] >= myID {
-        	continue
-        }
-
 		ip,_,_ := net.SplitHostPort(addr.String())
-
         if !addToMap(ip) {
         	continue
         }
 
 		var conn net.Conn
-		for i := 0; i < 3; i++{
-			conn, err = net.Dial("tcp", ip+":4487")
-			if err == nil {
+		for i := 0; i < 3; i++ {
+			conn, err = net.Dial("tcp", ip + ":4487")
+
+			if testErr(err, "TCP dial failed") {
 				break
 			}
 			time.Sleep(10 * time.Millisecond)
 		}
-		if err != nil {
+
+		if testErr(err, "TCP dial couldn't reach client. Removing from map") {
 			removeFromMap(ip)
 			continue
 		}
+
 		fmt.Printf("Connection established, id: %d\n", buf[0])
 		go ClientInit(conn)
 	}
 }
 
 func UdpBroadcast(){
-	ServerAddr,err := net.ResolveUDPAddr("udp","255.255.255.255:55087")
-    if err != nil {
-        fmt.Println("Error: ",err)
-    }
+	for {
+		ServerAddr,err := net.ResolveUDPAddr("udp","255.255.255.255:55087")
+	    if testErr(err, "Couldn't resolve UDPAddr broadcast") {
+	        continue
+	    }
 
- 
-    Conn, err := net.DialUDP("udp", nil, ServerAddr)
-    if err != nil {
-        fmt.Println("Error: ",err)
-    }
- 
-    defer Conn.Close()
-    for {
-        buf := []byte{myID}
-        _,err := Conn.Write(buf)
-        if err != nil {
-            fmt.Println(err)
-        }
-        time.Sleep(time.Second * 1)
-    }
+	    Conn, err := net.DialUDP("udp", nil, ServerAddr)
+	    if testErr(err, "Couldn't establish UDP connection") {
+	        continue
+	    }
+	 
+	    defer Conn.Close()
+	    for {
+	        buf := []byte{myID}
+	        _,err := Conn.Write(buf)
+	        testErr(err, "UDP write failed")
+
+	        time.Sleep(time.Second * 1)
+	    }
+	}
 }
 
 func TcpAccept(){
 	for {
 		ln, err := net.Listen("tcp", ":4487")
-		if err != nil {
-			// handle error
+		if testErr(err, "TCP Listen failed") {
 			continue
 		}
 		for {
 			conn, err := ln.Accept()
-			if err != nil {
-				// handle error
+			if testErr(err, "Accept TCP failed") {
 				continue
 			}
 			ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
@@ -359,47 +338,6 @@ func TcpAccept(){
 }
 
 
-//placeholder for compilation
-func addOrder(data uint16) {
-	fmt.Printf("Order to be handled by me: %d\n",data)
-}
-
-func CallAccepted(data uint16, id uint8){
-	fmt.Printf("Call acc: %d, %d\n", data, id)
-}
-
-func CallUnhandled(data uint16){
-	fmt.Printf("Call unhandled: %d\n", data)
-}
-
-var elev_c chan *Msg_t
-
-
-//rewrite
-func runProtocol(msg *Msg_t, talk_c <-chan *Msg_t, c *client, outgoing bool){
-	if outgoing {
-		switch msg.Type{
-		case CALL :
-			Call_out(msg, talk_c, c)
-		case COMPLETE_CALL : 
-			CallComplete_out(msg, talk_c, c)
-		case FAILED_CALL :
-			CallFailed_out(msg, talk_c, c)
-		}
-	} else {
-		switch msg.Type{
-		case PING :
-			Ping_in(msg, talk_c, c)
-		case CALL :
-			Call_in(msg, talk_c, c)
-		case COMPLETE_CALL : 
-			CallComplete_in(msg, talk_c, c)
-		case FAILED_CALL :
-			CallFailed_in(msg, talk_c, c)
-		}
-	}
-}
-
 func endTalk(c *client, id uint32){
 	talkTex.Lock()
 	if c.talkDone_c != nil {
@@ -409,93 +347,36 @@ func endTalk(c *client, id uint32){
 }
 
 
-func Ping_in(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-	lastID := msg.MsgID
-	run := true
-	for run{
-		select {
-		case msg := <- talk_c: 
-			if(msg.MsgID != lastID){
-				lastID = msg.MsgID
-				//notify sm
-			}
-		case <- c.dc_c :
-			//client dc
-			run = false
-		}
-	}
-	endTalk(c,msg.TalkId)
-}
-
-
-func Ping_out(id uint8, talkId uint32, c *client){
-	var lastID uint8 = 0
-	msg := Msg_t{talkId, id, lastID, PING, 0}
+func Ping_out(talkID uint32, c *client){
+	msg := Msg_t{TalkID: talkID, Type: PING}
 	for{
 		select {
 		case <- c.dc_c :
 			//client dc
 			return
 		case <- time.After(30 * time.Millisecond) :
-			msg.MsgID++
 			send(&msg, c.conn)
 		}
 	}
 }
 
-//Ikke fornøyd med denne måten å gjøre ting på
-//Vil helst at man skal anta at tcp meldinger går gjennom og heller sørge for ack med timeout
-func Call_in(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
-	addOrder(msg.Data)
-	sendACK(msg, talk_c, c)
-	endTalk(c,msg.TalkId)
-	fmt.Printf("Goroutine ended %d\n", msg.Type)
-}
-
-func Call_out(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
+func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
 	send(msg, c.conn)
 	if getACK(msg, talk_c, c) {
-		CallAccepted(msg.Data, c.id)
+		sm.EvtAccepted(&msg.Evt, c.smIndex)
 	} else {
-		CallUnhandled(msg.Data)
+		sm.EvtDismissed(&msg.Evt, c.smIndex)
 	}
-	endTalk(c,msg.TalkId)
+	endTalk(c,msg.TalkID)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
-
-
-func CallFailed_out(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-	
-	send(msg, c.conn)
-	getACK(msg, talk_c, c)
-	endTalk(c,msg.TalkId)
-	fmt.Printf("Goroutine ended %d\n", msg.Type)
-}
-
-func CallFailed_in(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-
-	fmt.Printf("Remove order %d\n", msg.Data)
+func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
+	sm.EvtRegister(&msg.Evt, c.smIndex)
 	sendACK(msg, talk_c, c)
-	endTalk(c,msg.TalkId)
-	fmt.Printf("Goroutine ended %d\n", msg.Type)
-}
-
-func CallComplete_out(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-
-	send(msg, c.conn)
-	getACK(msg, talk_c, c)
-	endTalk(c,msg.TalkId)
-	fmt.Printf("Goroutine ended %d\n", msg.Type)
-}
-
-func CallComplete_in(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-
-	fmt.Printf("Remove order %d\n", msg.Data)
-	sendACK(msg, talk_c, c)
-	endTalk(c,msg.TalkId)
+	endTalk(c,msg.TalkID)
 	fmt.Printf("Goroutine ended %d\n", msg.Type)
 }
 
@@ -507,7 +388,7 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 			if rcvMsg.Type == ACK {
 				return true
 			} else {
-				fmt.Printf("Talk : %d, Received unexpected message: %d\n", rcvMsg.TalkId, rcvMsg.Type)
+				fmt.Printf("Talk : %d, Received unexpected message: %d\n", rcvMsg.TalkID, rcvMsg.Type)
 			}
 		case <- c.dc_c :
 			//client dc
@@ -529,7 +410,7 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 		case rcvMsg := <- talk_c: 
 			//Ack not received
 			send(msg, c.conn)
-			fmt.Printf("Talk : %d, Resending: %d\n", rcvMsg.TalkId, rcvMsg.Type)
+			fmt.Printf("Talk : %d, Resending: %d\n", rcvMsg.TalkID, rcvMsg.Type)
 		case <- c.dc_c :
 			//client dc
 			return false

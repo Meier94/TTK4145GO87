@@ -42,3 +42,10 @@ func main() {
 	binary.Write(&bin_buf, binary.BigEndian, x2)
 	fmt.Printf("%q\n", bin_buf.Bytes())
 }
+
+Thoughts:
+	Hva skjer dersom du er stuck med ordre og du kobler deg til din første node
+
+	Hva hvis du får et kall fra en etasje og du allerede vet at ordren oppfylles
+
+	Flytt C. funksjonene til io.go

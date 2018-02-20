@@ -11,6 +11,9 @@ void set_floor_light(int floor);
 
 void clear_all_lights();
 
-uint16_t getEvent();
+void set_door_light(int value);
 
 void set_motor(int dir);
+
+uint16_t getEvent();
+

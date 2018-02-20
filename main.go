@@ -22,17 +22,18 @@ func main() {
 	// Our id can be anything. Here we pass it on the command line, using
 	//  `go run main.go -id=our_id`
 
-	elev.Init()
 	var id string
 	flag.StringVar(&id, "id", "", "id of this peer")
 	flag.Parse()
+
 	
 	idn,_:=strconv.Atoi(id)
 	fmt.Printf("%d\n",idn)
+
+	elev.Init(uint8(idn))
 	com.Init(uint8(idn))
 
 	go com.UdpListen()
 	go com.TcpAccept()
-	go com.UdpBroadcast()
-	tcp.ReadInput()
+	com.UdpBroadcast()
 }

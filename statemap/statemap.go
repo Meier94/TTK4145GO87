@@ -8,8 +8,8 @@ import (
 	"sync"
 )
 
-const m = 4
-const n = 256
+const m int16 = 4
+const n int16 = 256
 
 const UP uint8 = 0
 const DOWN uint8 = 1
@@ -17,23 +17,25 @@ const CAB uint8 = 2
 const STOP uint8 = 3
 
 const NONE = int16(-1)
+const ME = int16(0)
 
-const COMPLETE_CALL uint8 = 200
+const CALL_COMPLETE uint8 = 200
 const CALL uint8 = 201
-const FAILED_CALL uint8 = 204
+const FAILED_CALL uint8 = 202
+const STATE uint8 = 203
 
 type nodeInfo struct{
 	id uint8
-	floor uint8
-	target uint8
+	floor int16
+	target int16
 	stuck bool
 	send chan *Evt
 }
 
 type Evt struct{
 	Type uint8
-	Floor uint8
-	Target uint8
+	Floor int16
+	Target int16
 	Button uint8
 	Stuck bool
 	Supervise bool
@@ -54,40 +56,81 @@ type stateMap struct{
 
 var sm = stateMap{}
 
+var ElevMapUpdate func(int16)
 
-func sm_init(id uint8){
+func Init(id uint8){
 	sm.mutex = &sync.Mutex{}
 	sm.mutex.Lock()
 	sm.numNodes = 1
 
-	sm.nodes[0].id = id
-	sm.nodes[0].floor = 0
-	sm.nodes[0].target = 0
-	sm.nodes[0].stuck = false
+	sm.nodes[ME].id = id
+	sm.nodes[ME].floor = 0
+	sm.nodes[ME].target = 0
+	sm.nodes[ME].stuck = false
+
+
 
 	//AddOrdersFromFile(&sm)
 	sm.mutex.Unlock()
 }
 
 
+func EvtAccepted(evt *Evt, index int16){
+	switch evt.Type {
+	case CALL :
+		if evt.Supervise {
+			addOrder(evt.Floor, evt.Button, index, 0)
+		} else {
+			addOrder(evt.Floor, evt.Button, 0, index)
+		}
+	}
+}
 
+//Only happens if node is dc
+func EvtDismissed(evt *Evt, index int16){
+	switch evt.Type {
+	case CALL :
+		DelegateButtonPress(evt.Floor, evt.Button)
+	}
+}
+
+func EvtRegister(evt *Evt, index int16){
+	switch evt.Type {
+	case CALL :
+		if evt.Supervise {
+			addOrder(evt.Floor, evt.Button, index, 0)
+		} else {
+			addOrder(evt.Floor, evt.Button, 0, index)
+		}
+
+	case CALL_COMPLETE :
+		removeOrder(evt.Floor, evt.Button)
+
+	case STATE :
+		sm.nodes[index].floor = evt.Floor
+		sm.nodes[index].target = evt.Target
+		sm.nodes[index].stuck = evt.Stuck
+		if evt.Stuck {
+			Redistribute(index, false)
+		}
+	}
+}
 
 //Denne må skrives om til å fungere med startindex 1
-func sm_cost_function(floor uint8, buttonType uint8, index int) (int, bool) {
+func sm_cost_function(floor int16, buttonType uint8, index int) (int, bool) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 	node := &(sm.nodes[index]);
 
-	var cost uint8
+	var cost int16
 
 	if node.stuck {
 		return -1, true
 	}
 	if node.target == 0 {
+		cost = node.floor - floor
 		if node.floor < floor {
-			cost = floor - node.floor
-		} else {
-			cost = node.floor - floor
+			cost = -cost
 		}
 		return int(cost), true
 	}
@@ -109,10 +152,9 @@ func sm_cost_function(floor uint8, buttonType uint8, index int) (int, bool) {
 		cost =  node.floor + floor
 
 	}else {
+		cost = node.floor - floor
 		if node.floor < floor {
-			cost = floor - node.floor
-		} else {
-			cost = node.floor - floor
+			cost = -cost
 		}
 	}
 	return int(cost), false
@@ -121,8 +163,9 @@ func sm_cost_function(floor uint8, buttonType uint8, index int) (int, bool) {
 
 
 //helper function
-func sm_redistribute(index int16) {
-	for f := uint8(0); f < m; f++ {
+func Redistribute(index int16, removed bool) {
+	//Stuck or removed, redistribute orders
+	for f := int16(0); f < m; f++ {
 		if sm.orders[f][UP] == index{
 			sm.orders[f][UP] = NONE
 			sm.supervisors[f][UP] = NONE
@@ -134,20 +177,25 @@ func sm_redistribute(index int16) {
 			DelegateButtonPress(f, DOWN)
 		}
 	}
+	//if removed
+	//TODO: maybe add new supervisor (Not really necessary according to spec)
 }
 
-func AddOrder(floor uint8, buttonType uint8, index int16, supervisor int16){
+func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	sm.orders[floor][buttonType] = index
 	sm.supervisors[floor][buttonType] = supervisor
+	if index == ME {
+		ElevMapUpdate(floor)
+	}
 }
 
-func sm_remove_order(floor uint8, buttonType uint8, index int16){
+func removeOrder(floor int16, buttonType uint8){
 	sm.orders[floor][buttonType] = NONE
 	sm.supervisors[floor][buttonType] = NONE
 }
 
 //external function
-func AddNode(id uint8, floor uint8, target uint8, stuck bool, send chan *Evt) int16{
+func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) int16{
 	sm.mutex.Lock()
 	index := int16(sm.numNodes)
 	sm.nodes[index].id = id
@@ -160,10 +208,6 @@ func AddNode(id uint8, floor uint8, target uint8, stuck bool, send chan *Evt) in
 	return index
 }
 
-func GetState(index int16) (uint8, uint8, bool){
-	return sm.nodes[index].floor, sm.nodes[index].target, sm.nodes[index].stuck
-}
-
 //external function
 func RemoveNode(index int16){
 	sm.mutex.Lock()
@@ -171,22 +215,81 @@ func RemoveNode(index int16){
 		sm.nodes[i] = sm.nodes[i + 1]
 	}
 	sm.numNodes--
-	sm_redistribute(index)
+	Redistribute(index, true)
 	sm.mutex.Unlock()
 }
 
-//external function
-func sm_set_node_stuck(index int16, status bool) {
+func GetState(index int16) (int16, int16, bool){
 	sm.mutex.Lock()
-	sm.nodes[index].stuck = status
+	floor := sm.nodes[index].floor
+	target := sm.nodes[index].target
+	stuck := sm.nodes[index].stuck
 	sm.mutex.Unlock()
+	return floor, target, stuck
+}
+
+//Returns first in current direction
+//If non existant, returns first in other direction
+func newTarget(floor int16, dir uint8) int16{
+	above := NONE
+	below := NONE
+	for i := (floor + 1) * 3 ; i < m * 3; i++{
+		if sm.orders[i / m][i % 3] == ME {
+			above = i / m
+			break
+		}
+	}
+	for i := int16(0); i < floor * 3; i++{
+		if sm.orders[i / m][i % 3] == ME {
+			below = i / m
+		}
+	}
+	if dir == UP { 
+		if above != NONE {
+			return above
+		}
+		return below
+	}else if below != NONE {
+		return below
+	}
+	return above
+}
+
+
+func StatusUpdate(floor int16, stuck bool) int16{
+	sm.mutex.Lock()
+	target := sm.nodes[ME].target
+	//Order completed
+	if floor == target {
+		dir := UP
+		if sm.nodes[ME].floor > target {
+			dir = DOWN
+		}
+		evt := &Evt{Type: CALL_COMPLETE, Floor: floor, Button: dir}
+		if id := sm.supervisors[floor][dir]; id != -1 {
+			sm.nodes[id].send <- evt
+		}
+		removeOrder(floor, dir)
+		target = newTarget(floor, dir)
+	}
+
+	sm.nodes[ME].floor = floor
+	sm.nodes[ME].target = target
+	sm.nodes[ME].stuck = stuck
+
+	evt := &Evt{Type: STATE, Floor: floor, Target: target, Stuck: stuck}
+	for i := uint8(0); i < sm.numNodes; i++ {
+		sm.nodes[i].send <- evt
+	}
+	sm.mutex.Unlock()
+	return target
 }
 
 
 //burde kanskje returnere channel bare så fikser elev evt biffen?
-func DelegateButtonPress(floor uint8, buttonType uint8) {
+func DelegateButtonPress(floor int16, buttonType uint8) {
 	if buttonType == CAB {
-		AddOrder(floor, CAB, 0, -1)
+		addOrder(floor, CAB, 0, -1)
 		return
 	}
 
@@ -220,7 +323,7 @@ func DelegateButtonPress(floor uint8, buttonType uint8) {
 
 
 //Sjekker om lyset av en gitt type skal på i en gitt etasje.
-func sm_check_light(floor uint8, buttonType int) bool{
+func sm_check_light(floor int16, buttonType int) bool{
 
 	if sm.orders[floor][buttonType] != NONE {
 		return true

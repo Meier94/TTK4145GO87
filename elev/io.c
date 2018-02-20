@@ -93,7 +93,6 @@ uint16_t getEvent(){
 }
 
 void set_floor_light(int floor){
-    floor--;
     unsigned int data = floorlight[floor];
     comedi_dio_bitfield2(it_g, 3, 0x3, &data, 0);
     
@@ -106,7 +105,6 @@ void clear_all_lights(){
 
 
 void set_button_light(int floor, int type, int value){
-    floor--;
     comedi_dio_write(it_g, 3, lights[floor][type], value);
 }
 
