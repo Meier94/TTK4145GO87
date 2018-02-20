@@ -64,9 +64,14 @@ func Init(id uint8){
 	sm.numNodes = 1
 
 	sm.nodes[ME].id = id
-	sm.nodes[ME].floor = 0
-	sm.nodes[ME].target = 0
+	sm.nodes[ME].floor = NONE
+	sm.nodes[ME].target = NONE
 	sm.nodes[ME].stuck = false
+
+	for i := int16(0) ; i < m * 3; i++{
+		sm.orders[i / 3][i % 3] = NONE
+		sm.supervisors[i / 3][i % 3] = NONE
+	}
 
 
 
@@ -127,7 +132,7 @@ func sm_cost_function(floor int16, buttonType uint8, index int) (int, bool) {
 	if node.stuck {
 		return -1, true
 	}
-	if node.target == 0 {
+	if node.target == NONE {
 		cost = node.floor - floor
 		if node.floor < floor {
 			cost = -cost
@@ -185,12 +190,16 @@ func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	sm.orders[floor][buttonType] = index
 	sm.supervisors[floor][buttonType] = supervisor
 	if index == ME {
-		ElevMapUpdate(floor)
+		if sm.nodes[ME].target == NONE {
+			sm.nodes[ME].target = floor
+		}
+		go ElevMapUpdate(floor)
 	}
 }
 
 func removeOrder(floor int16, buttonType uint8){
 	sm.orders[floor][buttonType] = NONE
+	sm.orders[floor][CAB] = NONE
 	sm.supervisors[floor][buttonType] = NONE
 }
 
@@ -234,14 +243,15 @@ func newTarget(floor int16, dir uint8) int16{
 	above := NONE
 	below := NONE
 	for i := (floor + 1) * 3 ; i < m * 3; i++{
-		if sm.orders[i / m][i % 3] == ME {
-			above = i / m
+		if sm.orders[i / 3][i % 3] == ME {
+			println("over", i/3, i%3)
+			above = i / 3
 			break
 		}
 	}
 	for i := int16(0); i < floor * 3; i++{
-		if sm.orders[i / m][i % 3] == ME {
-			below = i / m
+		if sm.orders[i / 3][i % 3] == ME {
+			below = i / 3
 		}
 	}
 	if dir == UP { 
@@ -266,11 +276,15 @@ func StatusUpdate(floor int16, stuck bool) int16{
 			dir = DOWN
 		}
 		evt := &Evt{Type: CALL_COMPLETE, Floor: floor, Button: dir}
-		if id := sm.supervisors[floor][dir]; id != -1 {
+		if id := sm.supervisors[floor][dir]; id != NONE {
 			sm.nodes[id].send <- evt
 		}
 		removeOrder(floor, dir)
 		target = newTarget(floor, dir)
+		if target == NONE {
+			removeOrder(floor, 0x1^dir)
+		}
+		println("new target:",target)
 	}
 
 	sm.nodes[ME].floor = floor
@@ -278,7 +292,7 @@ func StatusUpdate(floor int16, stuck bool) int16{
 	sm.nodes[ME].stuck = stuck
 
 	evt := &Evt{Type: STATE, Floor: floor, Target: target, Stuck: stuck}
-	for i := uint8(0); i < sm.numNodes; i++ {
+	for i := uint8(1); i < sm.numNodes; i++ {
 		sm.nodes[i].send <- evt
 	}
 	sm.mutex.Unlock()
@@ -288,8 +302,11 @@ func StatusUpdate(floor int16, stuck bool) int16{
 
 //burde kanskje returnere channel bare så fikser elev evt biffen?
 func DelegateButtonPress(floor int16, buttonType uint8) {
-	if buttonType == CAB {
-		addOrder(floor, CAB, 0, -1)
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	if buttonType == CAB || sm.numNodes == 1{
+		addOrder(floor, buttonType, 0, NONE)
 		return
 	}
 
@@ -319,17 +336,6 @@ func DelegateButtonPress(floor int16, buttonType uint8) {
 		evt.Supervise = false
 		sm.nodes[index].send <- &evt
 	}
-}
-
-
-//Sjekker om lyset av en gitt type skal på i en gitt etasje.
-func sm_check_light(floor int16, buttonType int) bool{
-
-	if sm.orders[floor][buttonType] != NONE {
-		return true
-	}
-
-	return false
 }
 
 

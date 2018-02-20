@@ -49,3 +49,5 @@ Thoughts:
 	Hva hvis du får et kall fra en etasje og du allerede vet at ordren oppfylles
 
 	Flytt C. funksjonene til io.go
+
+	split status update og ordercomplete. tror dette vil gjøre et hav av forskjell

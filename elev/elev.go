@@ -36,7 +36,7 @@ var currentTarget int16 = NONE
 func Init(id uint8){
 	io_init()
 	clear_all_lights()
-	set_motor(STOP)
+	set_motor(UP)
 	sm.ElevMapUpdate = MapUpdate
 	sm.Init(id)
 	go triggerEvents()
@@ -88,23 +88,31 @@ func evtButtonPressed(floor int16, buttonType uint8){
 }
 
 func openDoor(){
+	
 	state = open_s
+	println("state: ",state)
 	setDoorLight(1)
-	time.AfterFunc(3, timeout)
+	time.AfterFunc(time.Second*3, timeout)
 	set_motor(STOP)
 }
 
 func timeout(){
 	setDoorLight(0)
 	if currentTarget != NONE && state != init_s{
+		println(currentTarget)
 		dir := UP
 		if currentFloor > currentTarget {
 			dir = DOWN
 		}
 		set_motor(dir)
+		
 		state = executing_s
+		println("state: ",state)
+		return
 	}
+	
 	state = idle_s
+	println("state: ",state)
 }
 
 
@@ -124,11 +132,17 @@ func evtFloorReached(floor int16){
 		}
 		if currentTarget == NONE {
 			if target == NONE {
+				println("test")
+				set_motor(STOP)
+				
 				state = idle_s
+				println("state: ",state)
 				return
 			}
 			currentTarget = target
+			
 			state = executing_s
+			println("state: ",state)
 		}
 		return
 	}
@@ -140,12 +154,20 @@ func MapUpdate(floor int16){
 		currentTarget = floor
 	}
 	if state == idle_s {
+		if currentFloor == floor {
+			openDoor()
+			currentTarget = sm.StatusUpdate(floor, false)
+			return
+		}
 		dir := UP
 		if currentFloor > currentTarget {
 			dir = DOWN
 		}
+		println("mapupdate going")
 		set_motor(dir)
+		
 		state = executing_s
+		println("state: ",state)
 	}
 }
 
@@ -154,16 +176,16 @@ func triggerEvents(){
 		if getInputs() {
 			for {
 				floor, evtType := getEvent()
-				if(floor < 1){
+				if(evtType > 3){
 					break
 				}
 				fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
 				if evtType == FLOOR {
+					println("arrival")
 					evtFloorReached(floor)
 					continue
 				}
 				evtButtonPressed(floor, evtType)
-
 			}
 		}
 		time.Sleep(10*time.Millisecond)

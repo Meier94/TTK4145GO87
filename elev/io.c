@@ -76,9 +76,9 @@ int get_signals(){
     return 0;
 }
 
-static uint16_t events[16] = {0x0200, 0x0100, 0x0402, 0x0302, 0x0202, 0x0102,
-                              0x0004, 0x0005, 0x0201, 0x0300, 0x0301, 0x0401,
-                              0x0103, 0x0203, 0x0303, 0x0403};
+static uint16_t events[16] = {0x0100, 0x0000, 0x0302, 0x0202, 0x0102, 0x0002,
+                              0x0004, 0x0005, 0x0101, 0x0200, 0x0201, 0x0301,
+                              0x0003, 0x0103, 0x0203, 0x0303};
 
 uint16_t getEvent(){
     while(pusheddown) {
@@ -90,6 +90,7 @@ uint16_t getEvent(){
         }
         return events[index];
     }
+    return 0x0004;
 }
 
 void set_floor_light(int floor){
