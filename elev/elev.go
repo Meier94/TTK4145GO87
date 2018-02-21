@@ -1,181 +1,170 @@
 package elev
-/*
-#include "io.h"
-#cgo LDFLAGS: -L . -lcomedi
-*/
-import "C"
 
 import (
+	"./io"
 	"../statemap"
 	"time"
+	"sync"
 	"fmt"
 )
 
+const m int16 = 4
+
+//Event types
 const UP uint8 = 0
 const DOWN uint8 = 1
-const CAB uint = 2
+const CAB uint8 = 2
 const STOP uint8 = 3
 const FLOOR uint8 = 3
 
+const NONE int16 = int16(-1)
+var currentFloor int16 = NONE
+var currentTarget int16 = NONE
+var currentDir uint8 = UP
+
+//States
 const idle_s = 0
 const init_s = 1
 const open_s = 2
 const stuck_s = 3
 const executing_s = 4
-
-var types [4]string = [4]string{"Up", "Down", "Cab", "Arrival"}
-
 var state int = init_s
 
-const NONE int16 = int16(-1)
-var currentFloor int16 = NONE
-var currentTarget int16 = NONE
+//Print helper
+var types [4]string = [4]string{"Up", "Down", "Cab", "Arrival"}
 
+
+var orders[m][3] bool
+var mutex *sync.Mutex
+
+var timer *time.Timer
+var timeTex *sync.Mutex
+var stopped bool = false
+var open bool = false
 
 
 func Init(id uint8){
-	io_init()
-	clear_all_lights()
-	set_motor(UP)
-	sm.ElevMapUpdate = MapUpdate
+	io.Init()
+	io.ClearAllLights()
+	sm.AddFunction(evtExternalInput)
+
+	timer = time.NewTimer(0 * time.Millisecond)
+	<- timer.C
+	mutex = &sync.Mutex{}
+	timeTex = &sync.Mutex{}
+	mutex.Lock()
+	for i := 0 ; i < int(m) * 3; i++{
+		orders[i / 3][i % 3] = false
+	}
+	mutex.Unlock()
+
 	sm.Init(id)
+
+	io.SetMotor(UP)
 	go triggerEvents()
 }
 
-func io_init() bool{
-	var i C.int = C.io_init()
-	if i < 0 {
-		return false
+func evtExternalInput(floor int16, buttonType uint8){
+	mutex.Lock()
+	defer mutex.Unlock()
+	fmt.Println("New Order ", floor, " ", buttonType)
+	orders[floor][buttonType] = true
+	newTarget, newDir := newTarget(currentFloor, currentDir)
+	defer updateCurrent(currentFloor, newTarget, newDir)
+
+	if newTarget == NONE {
+		openDoor()
+		go orderComplete(floor, currentDir, newDir)
 	}
-	return true
-}
 
-func getInputs() bool{
-	if C.get_signals() == C.int(1){
-		return true
+	switch state {
+	case idle_s:
+		if newTarget != NONE {
+			io.SetMotor(newDir)
+			state = executing_s
+		}
 	}
-	return false
 }
-
-func getEvent() (int16, uint8) {
-	var evt uint16 = uint16(C.getEvent())
-	return int16(evt >> 8), uint8(evt & 0xFF)
-}
-
-func set_button_light(floor int16, buttonType uint8, value int){
-	C.set_button_light(C.int(floor), C.int(buttonType), C.int(value))
-}
-
-func set_floor_light(floor int16){
-	C.set_floor_light(C.int(floor))
-}
-
-func clear_all_lights(){
-	C.clear_all_lights()
-}
-
-func set_motor(dir uint8){
-	C.set_motor(C.int(dir))
-}
-
-func setDoorLight(value int){
-	C.set_door_light(C.int(value))
-}
-
 
 func evtButtonPressed(floor int16, buttonType uint8){
-	sm.DelegateButtonPress(floor, buttonType)
+	mutex.Lock()
+	mutex.Unlock()
+	sm.AddButtonPress(floor, buttonType)
 }
 
-func openDoor(){
-	
-	state = open_s
-	println("state: ",state)
-	setDoorLight(1)
-	time.AfterFunc(time.Second*3, timeout)
-	set_motor(STOP)
-}
 
-func timeout(){
-	setDoorLight(0)
-	if currentTarget != NONE && state != init_s{
-		println(currentTarget)
-		dir := UP
+func evtTimeout(){
+	timeTex.Lock()
+	defer timeTex.Unlock()
+	if stopped {
+		stopped = false
+		return
+	}
+	open = false
+	mutex.Lock()
+	defer mutex.Unlock()
+	io.SetDoorLight(0)
+	if currentTarget != NONE{
+		currentDir := UP
 		if currentFloor > currentTarget {
-			dir = DOWN
+			currentDir = DOWN
 		}
-		set_motor(dir)
+		io.SetMotor(currentDir)
 		
 		state = executing_s
-		println("state: ",state)
 		return
 	}
 	
 	state = idle_s
-	println("state: ",state)
 }
 
-
+func updateCurrent(newFloor int16, newTarget int16, newDir uint8){
+	currentTarget = newTarget
+	currentFloor = newFloor
+	currentDir = newDir
+	fmt.Println("New state, floor: ", newFloor, " target: ", newTarget, " dir: ", newDir )
+}
 
 func evtFloorReached(floor int16){
-	currentFloor = floor
-	target := sm.StatusUpdate(floor, false)
+	mutex.Lock()
+
+	newTarget, newDir := newTarget(floor, currentDir)
+	defer sm.StatusUpdate(floor, newTarget, false)
+	defer mutex.Unlock()
+
+	defer updateCurrent(floor, newTarget, newDir)
+	
 
 	switch state {
 	case open_s:
 	case idle_s:
 	default:
 		if currentTarget == floor{
+			io.SetMotor(STOP)
 			openDoor()
-			currentTarget = target
+			orderComplete(floor, currentDir, newDir)
 			return
 		}
 		if currentTarget == NONE {
-			if target == NONE {
-				println("test")
-				set_motor(STOP)
-				
+			if newTarget == NONE {
+				io.SetMotor(STOP)
 				state = idle_s
-				println("state: ",state)
 				return
 			}
-			currentTarget = target
-			
+			io.SetMotor(newDir)
 			state = executing_s
-			println("state: ",state)
 		}
 		return
 	}
 	fmt.Println("Floor reached in wrong state")
 }
 
-func MapUpdate(floor int16){
-	if currentTarget == NONE {
-		currentTarget = floor
-	}
-	if state == idle_s {
-		if currentFloor == floor {
-			openDoor()
-			currentTarget = sm.StatusUpdate(floor, false)
-			return
-		}
-		dir := UP
-		if currentFloor > currentTarget {
-			dir = DOWN
-		}
-		println("mapupdate going")
-		set_motor(dir)
-		
-		state = executing_s
-		println("state: ",state)
-	}
-}
 
 func triggerEvents(){
 	for {
-		if getInputs() {
+		if io.GetInputs() {
 			for {
-				floor, evtType := getEvent()
+				floor, evtType := io.GetEvent()
 				if(evtType > 3){
 					break
 				}
@@ -189,5 +178,67 @@ func triggerEvents(){
 			}
 		}
 		time.Sleep(10*time.Millisecond)
+	}
+}
+
+func openDoor(){
+	state = open_s
+	io.SetDoorLight(1)
+	timeTex.Lock()
+	if open {
+		stopped = !timer.Stop()
+	}
+	open = true
+	timer = time.AfterFunc(time.Second*3, evtTimeout)
+	timeTex.Unlock()
+	io.SetMotor(STOP)
+}
+
+//Returns first in current direction
+//If non existant, returns first in other direction
+//Assumes it swaps direction if no orders in current direction
+func newTarget(floor int16, dir uint8) (int16, uint8){
+	above := NONE
+	below := NONE
+	for i := (floor + 1) * 3 ; i < m * 3; i++{
+		if orders[i / 3][i % 3] {
+			println("over", i/3, i%3)
+			above = i / 3
+			break
+		}
+	}
+	for i := int16(0); i < floor * 3; i++{
+		if orders[i / 3][i % 3] {
+			below = i / 3
+		}
+	}
+	if dir == UP { 
+		if above != NONE {
+			return above, UP
+		}
+		return below, DOWN
+
+	//Dir down
+	}else if below != NONE {
+		return below, DOWN
+	}
+	return above, UP
+}
+
+//may not do anything
+func orderComplete(floor int16, dir uint8, newDir uint8){
+	if orders[floor][CAB] {
+		orders[floor][CAB] = false
+		sm.CallComplete(floor, CAB)
+	}
+	if orders[floor][dir] {
+		orders[floor][dir] = false
+		sm.CallComplete(floor, dir)
+	}
+	if dir != newDir {
+		if orders[floor][1^dir] {
+			orders[floor][1^dir] = false
+			sm.CallComplete(floor, 1^dir)
+		}
 	}
 }

@@ -50,4 +50,6 @@ Thoughts:
 
 	Flytt C. funksjonene til io.go
 
-	split status update og ordercomplete. tror dette vil gjøre et hav av forskjell
+	Er i 3. trykker ned 2. trykker opp 1. Heis stopper i 2. Dette intended?
+
+	Hva hvis døra er åpen og du får et kall i samme etasje i riktig retning
