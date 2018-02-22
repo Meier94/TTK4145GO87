@@ -8,7 +8,18 @@ import (
 	"bytes"
 	"encoding/binary"
 	"sync"
+	"unsafe"
+	"runtime"
 )
+
+type Et struct{
+	Type uint8
+	Floor int16
+	Target int16
+	Button uint8
+	Stuck bool
+	Supervise bool
+}
 
 //felt må ha stor forbokstav for å kunne bli konvertert fra []byte
 type Msg_t struct{
@@ -17,6 +28,7 @@ type Msg_t struct{
 	Type uint8
 	Evt sm.Evt
 }
+
 
 type client struct{
 	id uint8
@@ -35,6 +47,7 @@ var talkTex *sync.Mutex
 var myID uint8
 
 func Init(id uint8){
+	BUFLEN = uint8(unsafe.Sizeof(Msg_t{}))
 	mapTex = &sync.Mutex{}
 	talkTex = &sync.Mutex{}
 	connections_m = make(map[string]int)
@@ -48,10 +61,11 @@ const PING uint8 = 201
 const INTRO uint8 = 202
 const EVT uint8 = 203
 
-const BUFLEN uint8 = 14
+var BUFLEN uint8 = 14
 
 
 func ClientInit(conn net.Conn){
+	fmt.Println(runtime.Version())
 	msg := Msg_t{ClientID: myID, Type: INTRO}
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
@@ -166,8 +180,8 @@ func toMsg(data []byte) *Msg_t{
 
 func toBytes(data *Msg_t) []byte{
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, data)
-	if err != nil {
+	err := binary.Write(buf, binary.BigEndian, *data)
+	if testErr(err, "") {
 		panic(err)
 	}
 	return buf.Bytes()
