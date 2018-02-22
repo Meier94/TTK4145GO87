@@ -48,7 +48,7 @@ const PING uint8 = 201
 const INTRO uint8 = 202
 const EVT uint8 = 203
 
-const BUFLEN uint8 = 12
+const BUFLEN uint8 = 14
 
 
 func ClientInit(conn net.Conn){
