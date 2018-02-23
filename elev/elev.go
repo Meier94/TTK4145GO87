@@ -43,8 +43,10 @@ var stopped bool = false
 var open bool = false
 
 
-func Init(id uint8){
-	io.Init()
+func Init(id uint8) bool {
+	if !io.Init(){
+		return false
+	}
 	io.ClearAllLights()
 	sm.AddFunction(evtExternalInput)
 
@@ -62,6 +64,7 @@ func Init(id uint8){
 
 	io.SetMotor(UP)
 	go triggerEvents()
+	return true
 }
 
 func evtExternalInput(floor int16, buttonType uint8){

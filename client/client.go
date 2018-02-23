@@ -94,6 +94,8 @@ func closeClient(c *client){
 	close(c.talkDone_c)
 	c.talkDone_c = nil
 	talkTex.Unlock()
+	close(c.dc_c)
+
 
 	for _, ch := range c.talks_m {
 		close(ch)

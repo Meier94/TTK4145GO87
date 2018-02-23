@@ -24,18 +24,21 @@ func main() {
 	// Our id can be anything. Here we pass it on the command line, using
 	//  `go run main.go -id=our_id`
 	fmt.Println(runtime.Version())
-	var id string
-	flag.StringVar(&id, "id", "", "id of this peer")
+	var ids string
+	flag.StringVar(&ids, "id", "", "id of this peer")
 	flag.Parse()
 
-	
-	idn,_:=strconv.Atoi(id)
-	fmt.Printf("%d\n",idn)
+	idn, _ := strconv.Atoi(ids)
+	id := uint8(idn)
+	fmt.Printf("%d\n",id)
 
-	elev.Init(uint8(idn))
-	client.Init(uint8(idn))
+	if !elev.Init(id){
+		fmt.Println("Couldn't start io")
+		return
+	}
+	client.Init(id)
 
-	com.Start(uint8(idn), client.ClientInit)
+	com.Start(id, client.ClientInit)
 
 	for{}
 	
