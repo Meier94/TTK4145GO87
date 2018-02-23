@@ -323,6 +323,7 @@ func UdpListen(){
 		}
 
 		fmt.Printf("Connection established, id: %d\n", buf[0])
+		conn.Write([]byte{1,2,3})
 		go ClientInit(conn, true)
 	}
 }
@@ -367,6 +368,10 @@ func TcpAccept(){
 	        }
 			
 			fmt.Printf("Connected to %s\n", conn.RemoteAddr())
+			buf := make([]byte, BUFLEN)
+			//conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
+			conn.Read(buf)
+			println("returned %v", buf)
 			go ClientInit(conn, false)
 		}
 	}
