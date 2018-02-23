@@ -94,8 +94,10 @@ func closeClient(c *client){
 	close(c.talkDone_c)
 	c.talkDone_c = nil
 	talkTex.Unlock()
-	close(c.dc_c)
 
+	for _, ch := range c.talks_m {
+		close(ch)
+	}
 	//issue that it returns before talks are finished cleaning up?
 	//remove itself from map
 	c.conn.Close()
@@ -245,14 +247,16 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 		//dc_c and talk_c gets filled by same routine.
 		//No messages will be received after dc_c closes
 		select {
-		case rcvMsg := <- talk_c: 
+		case rcvMsg, ok := <- talk_c:
+			if !ok {
+				return false
+			}
+
 			if rcvMsg.Type == ACK {
 				return true
 			} else {
 				fmt.Printf("Talk : %d, Received unexpected message: %d\n", rcvMsg.TalkID, rcvMsg.Type)
 			}
-		case <- c.dc_c : //client dc
-			return false
 
 		case <- time.After(40 * time.Millisecond) :
 			//Ack not received
@@ -268,13 +272,13 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	c.send(msg)
 	for {
 		select {
-		case rcvMsg := <- talk_c:
+		case rcvMsg, ok := <- talk_c:
+			if !ok {
+				return false
+			}
 			//Ack not received
 			c.send(msg)
 			fmt.Printf("Talk : %d, Resending: %d\n", rcvMsg.TalkID, rcvMsg.Type)
-		case <- c.dc_c :
-			//client dc
-			return false
 		case <- time.After(1000 * time.Millisecond) :
 			//Ack assumed received (or 25 tcp messages lost?)
 			return true
