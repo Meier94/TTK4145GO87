@@ -70,29 +70,10 @@ func ClientInit(conn net.Conn, flag bool){
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
 	println(conn.RemoteAddr().String())
-	println("here")
-	if flag{
+	send(&msg, conn)
 
-		go func(){
-			for {
-				_, err := conn.Write([]byte{1,2,3})
-				testErr(err, "writefail")
-				time.Sleep(time.Millisecond * 10)
-			}
-		}()
-		time.Sleep(time.Second * 100)
-	}
 
-	var cli client
-	//cli.id 			= intro.ClientID
-	cli.conn 		= conn
-	cli.talkDone_c  = make(chan uint32)
-	cli.dc_c 		= make(chan bool)
-	cli.evt_c 		= make(chan *sm.Evt)
-	cli.msg_c 		= make(chan *Msg_t)
-	go TcpListen(&cli, cli.msg_c)
-
-	intro := <- cli.msg_c
+	intro := TcpRead(conn)
 	if intro != nil {
 		println("recv")
 	}
@@ -105,6 +86,13 @@ func ClientInit(conn net.Conn, flag bool){
 	fmt.Println("msg rcv")
 	status = &intro.Evt
 
+	var cli client
+	cli.id 			= intro.ClientID
+	cli.conn 		= conn
+	cli.talkDone_c  = make(chan uint32)
+	cli.dc_c 		= make(chan bool)
+	cli.evt_c 		= make(chan *sm.Evt)
+	cli.msg_c 		= make(chan *Msg_t)
 	cli.talks_m 	= make(map[uint32]chan *Msg_t)
 	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
 
@@ -323,7 +311,6 @@ func UdpListen(){
 		}
 
 		fmt.Printf("Connection established, id: %d\n", buf[0])
-		conn.Write([]byte{1,2,3})
 		go ClientInit(conn, true)
 	}
 }
@@ -368,10 +355,6 @@ func TcpAccept(){
 	        }
 			
 			fmt.Printf("Connected to %s\n", conn.RemoteAddr())
-			buf := make([]byte, BUFLEN)
-			//conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
-			conn.Read(buf)
-			println("returned %v", buf)
 			go ClientInit(conn, false)
 		}
 	}
