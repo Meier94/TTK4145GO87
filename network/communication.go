@@ -69,9 +69,7 @@ func ClientInit(conn net.Conn){
 	msg := Msg_t{ClientID: myID, Type: INTRO}
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
-	send(&msg, conn)
-	send(&msg, conn)
-	send(&msg, conn)
+	go send(&msg, conn)
 
 	intro := TcpRead(conn)
 	if intro == nil || intro.Type != INTRO {
