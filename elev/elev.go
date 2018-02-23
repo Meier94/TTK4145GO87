@@ -204,7 +204,6 @@ func newTarget(floor int16, dir uint8) (int16, uint8){
 	below := NONE
 	for i := (floor + 1) * 3 ; i < m * 3; i++{
 		if orders[i / 3][i % 3] {
-			println("over", i/3, i%3)
 			above = i / 3
 			break
 		}

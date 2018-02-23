@@ -93,13 +93,13 @@ func closeClient(c *client){
 	talkTex.Lock()
 	close(c.talkDone_c)
 	c.talkDone_c = nil
-	talkTex.Unlock()
 	close(c.dc_c)
 
 
 	for _, ch := range c.talks_m {
 		close(ch)
 	}
+	talkTex.Unlock()
 	//issue that it returns before talks are finished cleaning up?
 	//remove itself from map
 	c.conn.Close()
