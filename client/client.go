@@ -262,7 +262,7 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 
 		case <- time.After(40 * time.Millisecond) :
 			//Ack not received
-			fmt.Printf("Ack not received\n")
+			fmt.Printf("Ack not received %d\n", msg.TalkID)
 			c.send(msg)
 		}
 	}
@@ -280,7 +280,7 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 			}
 			//Ack not received
 			c.send(msg)
-			fmt.Printf("Talk : %d, Resending: %d\n", rcvMsg.TalkID, rcvMsg.Type)
+			fmt.Printf("Talk : %d, resending Ack\n", rcvMsg.TalkID)
 		case <- time.After(1000 * time.Millisecond) :
 			//Ack assumed received (or 25 tcp messages lost?)
 			return true
