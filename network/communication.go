@@ -135,7 +135,7 @@ func ClientListen(c *client){
 				//Notify correct protocol
 				if !notifyTalk(c.talks_m, newMsg){
 					new_c := make(chan *Msg_t)
-					go recvEvt(newMsg, new_c, c)
+					go runProtocol(newMsg, new_c, c, false)
 					c.talks_m[newMsg.TalkID] = new_c
 				}
 			}
@@ -144,7 +144,7 @@ func ClientListen(c *client){
 				newMsg := &Msg_t{TalkID: TalkCounter, Type: EVT, Evt: *evt}
 				new_c := make(chan *Msg_t)
 				c.talks_m[TalkCounter] = new_c
-				go sendEvt(newMsg, new_c, c)
+				go runProtocol(newMsg, new_c, c, true)
 				TalkCounter += 2
 
 			case id := <- c.talkDone_c:{
@@ -155,11 +155,13 @@ func ClientListen(c *client){
 }
 
 func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
-	recvChan := talks_m[msg.TalkID]
-	if recvChan == nil {
-		return false
+	if msg.TalkID > 1 {
+		recvChan := talks_m[msg.TalkID]
+		if recvChan == nil {
+			return false
+		}
+		recvChan <- msg
 	}
-	recvChan <- msg
 	return true
 }
 
@@ -379,6 +381,22 @@ func Ping_out(talkID uint32, c *client){
 	}
 }
 
+func runProtocol(msg *Msg_t, talk_c <-chan *Msg_t, c *client, outgoing bool){
+	if outgoing {
+		switch msg.Type{
+		default:
+			go sendEvt(msg, talk_c, c)
+		}
+
+	} else {
+		switch msg.Type{
+		case PING:
+			//nothing
+		default:
+			go recvEvt(msg, talk_c, c)
+		}
+	}
+}
 
 func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
