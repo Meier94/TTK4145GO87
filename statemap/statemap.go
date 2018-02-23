@@ -244,7 +244,6 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 
 
 //internal
-//Se over denne dritten
 func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 	node := &(sm.nodes[index]);
 	var cost int16
@@ -264,6 +263,7 @@ func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 	if node.floor < node.target {
 		dir = UP
 	}
+
 	if buttonType == UP && dir == DOWN {                          	   //Kall oppover, men heisen går nedover
 		cost =  node.floor + floor
 

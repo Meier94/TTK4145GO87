@@ -48,7 +48,6 @@ var myID uint8
 func Init(id uint8){
 	fmt.Println(runtime.Version())
 	BUFLEN = uint8(binary.Size(Msg_t{}))
-	fmt.Printf("size %d", BUFLEN)
 	mapTex = &sync.Mutex{}
 	talkTex = &sync.Mutex{}
 	connections_m = make(map[string]int)
@@ -203,7 +202,7 @@ func toMsg(data []byte) *Msg_t{
 func toBytes(data *Msg_t) []byte{
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, *data)
-	if testErr(err, "sjekk") {
+	if testErr(err, "Couldn't convert message") {
 		panic(err)
 	}
 	return buf.Bytes()
