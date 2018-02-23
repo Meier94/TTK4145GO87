@@ -69,9 +69,17 @@ func ClientInit(conn net.Conn){
 	msg := Msg_t{ClientID: myID, Type: INTRO}
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
+	println(conn.RemoteAddr().String())
+	println("here")
+	var channel chan *Msg_t
+	channel = make(chan *Msg_t)
+	go TcpRead(conn, channel)
 	go send(&msg, conn)
 
-	intro := TcpRead(conn)
+	intro := <- channel
+	if intro != nil {
+		println("recv")
+	}
 	if intro == nil || intro.Type != INTRO {
 		ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
 		removeFromMap(ip)
@@ -214,7 +222,7 @@ func TcpListen(c *client, msg_c chan<- *Msg_t){
 	}
 }
 
-func TcpRead(conn net.Conn) *Msg_t{
+func TcpRead(conn net.Conn, ch chan *Msg_t){
 	buf := make([]byte, BUFLEN)
 	conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
 	n, err := conn.Read(buf)
@@ -226,10 +234,9 @@ func TcpRead(conn net.Conn) *Msg_t{
 			fmt.Printf("Tcp read failed\n")
 		}
 		conn.Close()
-		return nil
+		ch <- nil
 	}
-	msg := toMsg(buf)
-	return msg
+	ch <- toMsg(buf)
 }
 
 
