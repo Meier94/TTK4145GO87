@@ -116,9 +116,10 @@ func EvtRegister(evt *Evt, index int16){
 	switch evt.Type {
 	case CALL :
 		if evt.Supervise {
-			addOrder(evt.Floor, evt.Button, 0, index)
-		} else {
 			addOrder(evt.Floor, evt.Button, index, 0)
+			
+		} else {
+			addOrder(evt.Floor, evt.Button, 0, index)
 		}
 
 	case CALL_COMPLETE :
