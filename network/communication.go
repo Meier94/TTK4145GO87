@@ -311,7 +311,7 @@ func UdpListen(){
 		for i := 0; i < 3; i++ {
 			conn, err = net.Dial("tcp", ip + ":4487")
 
-			if testErr(err, "TCP dial failed") {
+			if !testErr(err, "TCP dial failed") {
 				break
 			}
 			time.Sleep(10 * time.Millisecond)
