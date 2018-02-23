@@ -5,9 +5,11 @@ import (
 	"./elev"
 	"./network"
 	"./client"
+	"./statemap"
 	"runtime"
 //	"net"
 	"flag"
+	"time"
 	"fmt"
 	"strconv"
 )
@@ -40,6 +42,9 @@ func main() {
 
 	com.Start(id, client.ClientInit)
 
-	for{}
+	for{
+		sm.PrintMap()
+		time.Sleep(100*time.Millisecond)
+	}
 	
 }

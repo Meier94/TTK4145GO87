@@ -5,7 +5,7 @@ import (
 	"../statemap"
 	"time"
 	"sync"
-	"fmt"
+//	"fmt"
 )
 
 const m int16 = 4
@@ -70,7 +70,7 @@ func Init(id uint8) bool {
 func evtExternalInput(floor int16, buttonType uint8){
 	mutex.Lock()
 	defer mutex.Unlock()
-	fmt.Println("New Order ", floor, " ", buttonType)
+	//fmt.Println("New Order ", floor, " ", buttonType)
 	orders[floor][buttonType] = true
 	newTarget, newDir := newTarget(currentFloor, currentDir)
 	defer updateCurrent(currentFloor, newTarget, newDir)
@@ -125,7 +125,7 @@ func updateCurrent(newFloor int16, newTarget int16, newDir uint8){
 	currentTarget = newTarget
 	currentFloor = newFloor
 	currentDir = newDir
-	fmt.Println("New state, floor: ", newFloor, " target: ", newTarget, " dir: ", newDir )
+	//fmt.Println("New state, floor: ", newFloor, " target: ", newTarget, " dir: ", newDir )
 }
 
 func evtFloorReached(floor int16){
@@ -159,7 +159,7 @@ func evtFloorReached(floor int16){
 		}
 		return
 	}
-	fmt.Println("Floor reached in wrong state")
+	//fmt.Println("Floor reached in wrong state")
 }
 
 
@@ -171,7 +171,7 @@ func triggerEvents(){
 				if(evtType > 3){
 					break
 				}
-				//fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
+				////fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
 				if evtType == FLOOR {
 					evtFloorReached(floor)
 					continue

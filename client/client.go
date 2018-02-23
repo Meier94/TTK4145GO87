@@ -52,7 +52,7 @@ func Init(id uint8){
 
 func testErr(err error, msg string) bool {
 	if err != nil {
-		fmt.Println(msg,err)
+		//fmt.Println(msg,err)
 		return true
 	}
 	return false
@@ -81,13 +81,13 @@ func ClientInit(conn com.Connection, flag bool){
 	cli.talks_m 	= make(map[uint32]chan *Msg_t)
 	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
 
-	fmt.Printf("Node added, Floor: %d, Target: %d, Stuck: %t, ID: %d\n", status.Floor, status.Target, status.Stuck, cli.id)
+	sm.Print(fmt.Sprintf("Node added, Floor: %d, Target: %d, Stuck: %t, ID: %d", status.Floor, status.Target, status.Stuck, cli.id))
 
 	go ClientListen(&cli)
 }
 
 func closeClient(c *client){
-	fmt.Printf("Connection to %d closed.\n",c.id)
+	sm.Print(fmt.Sprintf("Connection to %d closed.",c.id))
 
 	sm.RemoveNode(c.smIndex)
 	talkTex.Lock()
@@ -172,7 +172,7 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 		select {
 		case recvChan <- msg:
 		case <- time.After(5 * time.Millisecond):
-			fmt.Println("Couldn't forward message")
+			//fmt.Println("Couldn't forward message")
 			//This should only happen if an ack message is assumed received
 			//but two tcp messages got lost, and the third message is actually
 			//received as the getAck times out. Precautinary
@@ -190,7 +190,7 @@ func endTalk(c *client, id uint32){
 	}
 	talks--
 	if talks == 0{
-		fmt.Println("No talks active")
+		//fmt.Println("No talks active")
 	}
 	talkTex.Unlock()
 }
@@ -253,16 +253,15 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 			if !ok {
 				return false
 			}
-
 			if rcvMsg.Type == ACK {
 				return true
 			} else {
-				fmt.Printf("Talk : %d, Received unexpected message: %d\n", rcvMsg.TalkID, rcvMsg.Type)
+				sm.Print(fmt.Sprintf("Talk : %d, Received unexpected message: %d", rcvMsg.TalkID, rcvMsg.Type))
 			}
 
 		case <- time.After(40 * time.Millisecond) :
 			//Ack not received
-			fmt.Printf("Ack not received %d\n", msg.TalkID)
+			sm.Print(fmt.Sprintf("Ack not received %d", msg.TalkID))
 			c.send(msg)
 		}
 	}
@@ -280,7 +279,7 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 			}
 			//Ack not received
 			c.send(msg)
-			fmt.Printf("Talk : %d, resending Ack\n", rcvMsg.TalkID)
+			sm.Print(fmt.Sprintf("Talk : %d, resending Ack", rcvMsg.TalkID))
 		case <- time.After(1000 * time.Millisecond) :
 			//Ack assumed received (or 25 tcp messages lost?)
 			return true

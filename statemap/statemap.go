@@ -60,6 +60,10 @@ var elevAddOrder func(int16, uint8)
 
 
 func Init(id uint8){
+	mut = &sync.Mutex{}
+	Print("test")
+	Print("test2")
+	Print("test3")
 	sm.mutex = &sync.Mutex{}
 	sm.mutex.Lock()
 	sm.numNodes = 1
@@ -216,7 +220,7 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 	lowestCost := 1000
 	for i := 0; i < int(sm.numNodes); i++ {
 		nodeCost, nodeIdle := costFunction(floor, buttonType, i)
-		fmt.Printf("Node cost id %d: %d\n", i, nodeCost)
+		Print(fmt.Sprintf("Node cost id %d: %d", i, nodeCost))
 		if nodeCost < lowestCost && nodeCost != -1 {
 			index = i
 			lowestCost = nodeCost
@@ -224,7 +228,7 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 			index = i
 		}
 	}
-	fmt.Printf("Lowest: %d \n", index)
+	Print(fmt.Sprintf("Lowest: %d ", index))
 
 	if index == -1 {
 		return
@@ -325,9 +329,31 @@ func removeOrder(floor int16, buttonType uint8){
 
 //Would have preferred to lock the map while printing but it is slow
 //Any concurrent write to the statemap will manifest only in the printed output
-func smPrintMap(){
+var first int = 0
+const numstrings = 8
+var mut *sync.Mutex
+var strings [numstrings]string
+var firstRun = true
+
+func Print(s string){
+	mut.Lock()
+	first = (first + 1)%numstrings
+	strings[first] = s
+	mut.Unlock()
+}
+
+func PrintMap(){
+
+	if !firstRun {
+		for i := 0; i < numstrings + 10; i++ {
+			fmt.Printf("%c[2K\r",27)
+			fmt.Printf("%c[A", 27)
+		}
+	}
+	firstRun = false
+
 	num := int(sm.numNodes)
-	fmt.Printf("\n F  - | U , D , C | \n");
+	fmt.Printf(" F  - | U , D , C | \n");
 	for f := m-1; f >= 0; f--{
 		fmt.Printf("%3d - |%3d,%3d,%3d|\n",f, sm.orders[f][UP],
 								      		  sm.orders[f][DOWN],
@@ -360,4 +386,15 @@ func smPrintMap(){
 	}
 
 	fmt.Printf("\n");
+
+	mut.Lock()
+	index := first
+	for i := 0; i < numstrings; i++ {
+		index = (first - i) % numstrings
+		if index < 0 {
+			index = numstrings + index
+		}
+		fmt.Println(strings[index])
+	}
+	mut.Unlock()
 }
