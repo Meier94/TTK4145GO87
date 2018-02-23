@@ -168,9 +168,8 @@ func triggerEvents(){
 				if(evtType > 3){
 					break
 				}
-				fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
+				//fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
 				if evtType == FLOOR {
-					println("arrival")
 					evtFloorReached(floor)
 					continue
 				}

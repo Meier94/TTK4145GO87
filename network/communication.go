@@ -407,14 +407,14 @@ func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 		sm.EvtDismissed(&msg.Evt, c.smIndex)
 	}
 	endTalk(c,msg.TalkID)
-	fmt.Printf("Goroutine ended %d\n", msg.Type)
+	fmt.Printf("Goroutine ended %d, %d\n", msg.Type, msg.TalkID)
 }
 
 func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 	sm.EvtRegister(&msg.Evt, c.smIndex)
 	sendACK(msg, talk_c, c)
 	endTalk(c,msg.TalkID)
-	fmt.Printf("Goroutine ended %d\n", msg.Type)
+	fmt.Printf("Goroutine ended %d, %d\n", msg.Type, msg.TalkID)
 }
 
 
