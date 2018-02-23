@@ -75,7 +75,8 @@ func ClientInit(conn net.Conn, flag bool){
 
 		go func(){
 			for {
-				conn.Write([]byte{1,2,3})
+				_, err := conn.Write([]byte{1,2,3})
+				testErr(err, "writefail")
 				time.Sleep(time.Millisecond * 10)
 			}
 		}()
@@ -209,7 +210,7 @@ func toBytes(data *Msg_t) []byte{
 
 
 func TcpListen(c *client, msg_c chan<- *Msg_t){
-	buf := make([]byte, BUFLEN)
+	buf := make([]byte, 3)
 	for {
 		c.conn.SetReadDeadline(time.Now().Add(10000 * time.Millisecond))
 		n, err := c.conn.Read(buf)
