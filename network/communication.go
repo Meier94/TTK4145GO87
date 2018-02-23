@@ -46,6 +46,7 @@ var talkTex *sync.Mutex
 var myID uint8
 
 func Init(id uint8){
+	fmt.Println(runtime.Version())
 	BUFLEN = uint8(binary.Size(Msg_t{}))
 	fmt.Printf("size %d", BUFLEN)
 	mapTex = &sync.Mutex{}
@@ -65,10 +66,11 @@ var BUFLEN uint8 = 16
 
 
 func ClientInit(conn net.Conn){
-	fmt.Println(runtime.Version())
 	msg := Msg_t{ClientID: myID, Type: INTRO}
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
+	send(&msg, conn)
+	send(&msg, conn)
 	send(&msg, conn)
 
 	intro := TcpRead(conn)
