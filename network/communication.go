@@ -225,7 +225,7 @@ func TcpListen(c *client, msg_c chan<- *Msg_t){
 }
 
 func TcpRead(conn net.Conn) *Msg_t{
-	buf := make([]byte, BUFLEN)
+	buf := make([]byte, 3)
 	conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
 	n, err := conn.Read(buf)
 	if err != nil || n != int(BUFLEN){
