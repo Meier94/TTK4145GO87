@@ -73,7 +73,7 @@ func evtExternalInput(floor int16, buttonType uint8){
 	orders[floor][buttonType] = true
 	newTarget, newDir := newTarget(currentFloor, currentDir)
 	defer func(){
-			go sm.StatusUpdate(floor, newTarget, false)
+			go sm.StatusUpdate(currentFloor, newTarget, false)
 		}()
 	defer mutex.Unlock()
 	defer updateCurrent(currentFloor, newTarget, newDir)
