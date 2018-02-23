@@ -63,6 +63,7 @@ const INTRO uint8 = 202
 const EVT uint8 = 203
 
 var BUFLEN uint8 = 14
+var talks uint32 = 0
 
 
 func ClientInit(conn net.Conn, flag bool){
@@ -134,24 +135,35 @@ func ClientListen(c *client){
 				}
 				//Notify correct protocol
 				if !notifyTalk(c.talks_m, newMsg){
-					new_c := make(chan *Msg_t)
-					go runProtocol(newMsg, new_c, c, false)
-					c.talks_m[newMsg.TalkID] = new_c
+					newTalk(newMsg, c, nil, false)
 				}
 			}
 
 			case evt := <- c.evt_c :
-				newMsg := &Msg_t{TalkID: TalkCounter, Type: EVT, Evt: *evt}
-				new_c := make(chan *Msg_t)
-				c.talks_m[TalkCounter] = new_c
-				go runProtocol(newMsg, new_c, c, true)
-				TalkCounter += 2
+				newMsg := &Msg_t{Type: EVT, Evt: *evt}
+				newTalk(newMsg, c, &TalkCounter, true)
 
 			case id := <- c.talkDone_c:{
 				delete(c.talks_m, id)
 			}
 		}
 	}
+}
+
+func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool){
+	new_c := make(chan *Msg_t)
+	talkTex.Lock()
+
+	talks++
+	if outgoing {
+		msg.TalkID = *counter
+		*counter += 2
+	}
+
+	c.talks_m[msg.TalkID] = new_c
+	talkTex.Unlock()
+
+	go runProtocol(msg, new_c, c, outgoing)
 }
 
 func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
@@ -364,6 +376,10 @@ func endTalk(c *client, id uint32){
 	if c.talkDone_c != nil {
 		c.talkDone_c <- id
 	}
+	talks--
+	if talks == 0{
+		fmt.Println("No talks active")
+	}
 	talkTex.Unlock()
 }
 
@@ -407,14 +423,14 @@ func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 		sm.EvtDismissed(&msg.Evt, c.smIndex)
 	}
 	endTalk(c,msg.TalkID)
-	fmt.Printf("Goroutine ended %d, %d\n", msg.Type, msg.TalkID)
+	//fmt.Printf("Goroutine ended %d, %d\n", msg.Type, msg.TalkID)
 }
 
 func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 	sm.EvtRegister(&msg.Evt, c.smIndex)
 	sendACK(msg, talk_c, c)
 	endTalk(c,msg.TalkID)
-	fmt.Printf("Goroutine ended %d, %d\n", msg.Type, msg.TalkID)
+	//fmt.Printf("Goroutine ended %d, %d\n", msg.Type, msg.TalkID)
 }
 
 
