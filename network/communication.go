@@ -78,8 +78,16 @@ func ClientInit(conn net.Conn){
 		}
 		}()
 
-	intro := TcpRead(conn)
+	var cli client
+	//cli.id 			= intro.ClientID
+	cli.conn 		= conn
+	cli.talkDone_c  = make(chan uint32)
+	cli.dc_c 		= make(chan bool)
+	cli.evt_c 		= make(chan *sm.Evt)
+	cli.msg_c 		= make(chan *Msg_t)
+	go TcpListen(&cli, cli.msg_c)
 
+	intro := <- cli.msg_c
 	if intro != nil {
 		println("recv")
 	}
@@ -92,13 +100,6 @@ func ClientInit(conn net.Conn){
 	fmt.Println("msg rcv")
 	status = &intro.Evt
 
-	var cli client
-	cli.id 			= intro.ClientID
-	cli.conn 		= conn
-	cli.talkDone_c  = make(chan uint32)
-	cli.dc_c 		= make(chan bool)
-	cli.evt_c 		= make(chan *sm.Evt)
-	cli.msg_c 		= make(chan *Msg_t)
 	cli.talks_m 	= make(map[uint32]chan *Msg_t)
 	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
 
@@ -206,7 +207,7 @@ func toBytes(data *Msg_t) []byte{
 func TcpListen(c *client, msg_c chan<- *Msg_t){
 	buf := make([]byte, BUFLEN)
 	for {
-		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		c.conn.SetReadDeadline(time.Now().Add(10000 * time.Millisecond))
 		n, err := c.conn.Read(buf)
 		if err != nil || n != int(BUFLEN){
 
@@ -225,7 +226,7 @@ func TcpListen(c *client, msg_c chan<- *Msg_t){
 }
 
 func TcpRead(conn net.Conn) *Msg_t{
-	buf := make([]byte, 3)
+	buf := make([]byte, BUFLEN)
 	conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
 	n, err := conn.Read(buf)
 	if err != nil || n != int(BUFLEN){
