@@ -72,18 +72,13 @@ func ClientInit(conn net.Conn, flag bool){
 	println(conn.RemoteAddr().String())
 	send(&msg, conn)
 
-
 	intro := TcpRead(conn)
-	if intro != nil {
-		println("recv")
-	}
 	if intro == nil || intro.Type != INTRO {
 		ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
 		removeFromMap(ip)
 		conn.Close()
 		return
 	}
-	fmt.Println("msg rcv")
 	status = &intro.Evt
 
 	var cli client
@@ -95,6 +90,8 @@ func ClientInit(conn net.Conn, flag bool){
 	cli.msg_c 		= make(chan *Msg_t)
 	cli.talks_m 	= make(map[uint32]chan *Msg_t)
 	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
+
+	fmt.Printf("Node added, Floor: %d, Target: %d, Stuck: %t, ID: %d", status.Floor, status.Target, status.Stuck, cli.id)
 
 	go ClientListen(&cli)
 }
@@ -200,7 +197,7 @@ func toBytes(data *Msg_t) []byte{
 func TcpListen(c *client, msg_c chan<- *Msg_t){
 	buf := make([]byte, BUFLEN)
 	for {
-		c.conn.SetReadDeadline(time.Now().Add(10000 * time.Millisecond))
+		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		n, err := c.conn.Read(buf)
 		if err != nil || n != int(BUFLEN){
 
@@ -211,7 +208,6 @@ func TcpListen(c *client, msg_c chan<- *Msg_t){
 			close(msg_c)
 			return
 		}
-		fmt.Println("msg rcv")
 		msg := toMsg(buf)
 		//Translate into msg format
 		msg_c <- msg
