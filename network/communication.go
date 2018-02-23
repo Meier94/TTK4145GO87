@@ -65,18 +65,22 @@ const EVT uint8 = 203
 var BUFLEN uint8 = 14
 
 
-func ClientInit(conn net.Conn){
+func ClientInit(conn net.Conn, flag bool){
 	msg := Msg_t{ClientID: myID, Type: INTRO}
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
 	println(conn.RemoteAddr().String())
 	println("here")
-	go func(){
-		for {
-			send(&msg, conn)
-			time.Sleep(time.Millisecond * 10)
-		}
+	if flag{
+
+		go func(){
+			for {
+				send(&msg, conn)
+				time.Sleep(time.Millisecond * 10)
+			}
 		}()
+		time.Sleep(time.Second * 100)
+	}
 
 	var cli client
 	//cli.id 			= intro.ClientID
@@ -318,7 +322,7 @@ func UdpListen(){
 		}
 
 		fmt.Printf("Connection established, id: %d\n", buf[0])
-		go ClientInit(conn)
+		go ClientInit(conn, true)
 	}
 }
 
@@ -362,7 +366,7 @@ func TcpAccept(){
 	        }
 			
 			fmt.Printf("Connected to %s\n", conn.RemoteAddr())
-			go ClientInit(conn)
+			go ClientInit(conn, false)
 		}
 	}
 }
