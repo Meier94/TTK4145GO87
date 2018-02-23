@@ -152,7 +152,7 @@ func ClientListen(c *client){
 
 func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool){
 	new_c := make(chan *Msg_t)
-	//talkTex.Lock()
+	talkTex.Lock()
 
 	talks++
 	if outgoing {
@@ -161,14 +161,16 @@ func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool){
 	}
 
 	c.talks_m[msg.TalkID] = new_c
-	//talkTex.Unlock()
+	talkTex.Unlock()
 
 	go runProtocol(msg, new_c, c, outgoing)
 }
 
 func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 	if msg.TalkID > 1 {
+		talkTex.Lock()
 		recvChan := talks_m[msg.TalkID]
+		talkTex.Unlock()
 		if recvChan == nil {
 			return false
 		}
