@@ -220,7 +220,6 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 	lowestCost := 1000
 	for i := 0; i < int(sm.numNodes); i++ {
 		nodeCost, nodeIdle := costFunction(floor, buttonType, i)
-		Print(fmt.Sprintf("Node cost id %d: %d", i, nodeCost))
 		if nodeCost < lowestCost && nodeCost != -1 {
 			index = i
 			lowestCost = nodeCost

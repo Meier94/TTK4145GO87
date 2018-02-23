@@ -70,7 +70,7 @@ func Init(id uint8) bool {
 func evtExternalInput(floor int16, buttonType uint8){
 	mutex.Lock()
 	defer mutex.Unlock()
-	//fmt.Println("New Order ", floor, " ", buttonType)
+	sm.Printf(fmt.SprintF("New Order %d, %s",floor, types[buttonType]))
 	orders[floor][buttonType] = true
 	newTarget, newDir := newTarget(currentFloor, currentDir)
 	defer updateCurrent(currentFloor, newTarget, newDir)
