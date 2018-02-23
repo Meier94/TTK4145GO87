@@ -61,7 +61,7 @@ const PING uint8 = 201
 const INTRO uint8 = 202
 const EVT uint8 = 203
 
-var BUFLEN uint8 = 14
+var BUFLEN uint8 = 16
 
 
 func ClientInit(conn net.Conn){
@@ -78,6 +78,7 @@ func ClientInit(conn net.Conn){
 		conn.Close()
 		return
 	}
+	fmt.Println("msg rcv")
 	status = &intro.Evt
 
 	var cli client
@@ -202,7 +203,7 @@ func TcpListen(c *client, msg_c chan<- *Msg_t){
 			close(msg_c)
 			return
 		}
-
+		fmt.Println("msg rcv")
 		msg := toMsg(buf)
 		//Translate into msg format
 		msg_c <- msg
@@ -211,7 +212,7 @@ func TcpListen(c *client, msg_c chan<- *Msg_t){
 
 func TcpRead(conn net.Conn) *Msg_t{
 	buf := make([]byte, BUFLEN)
-	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
 	n, err := conn.Read(buf)
 	if err != nil || n != int(BUFLEN){
 
