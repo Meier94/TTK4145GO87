@@ -75,7 +75,7 @@ func ClientInit(conn net.Conn, flag bool){
 
 		go func(){
 			for {
-				send(&msg, conn)
+				conn.Write([]byte{1,2,3})
 				time.Sleep(time.Millisecond * 10)
 			}
 		}()
