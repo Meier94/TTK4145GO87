@@ -62,7 +62,7 @@ const PING uint8 = 201
 const INTRO uint8 = 202
 const EVT uint8 = 203
 
-var BUFLEN uint8 = 16
+var BUFLEN uint8 = 14
 
 
 func ClientInit(conn net.Conn){
@@ -164,7 +164,8 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 
 func send(msg *Msg_t, conn net.Conn){
 	buf := toBytes(msg)
-	_, err := conn.Write(buf)
+	n, err := conn.Write(buf)
+	println("Sent: ", n)
 	if testErr(err, "") {
 		panic(err)
 	}
