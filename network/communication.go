@@ -7,18 +7,24 @@ import (
 	"sync"
 )
 
-
+type Connection struct{
+	conn net.Conn
+}
 
 var connections_m map[string]int
 var mapTex *sync.Mutex
 var myID uint8
-var connectionCallback func(net.Conn, bool)
+var connectionCallback func(Connection, bool)
 
-func Start(id uint8, callback func(net.Conn, bool)){
+func Start(id uint8, callback func(Connection, bool)){
 	connectionCallback = callback
 	mapTex = &sync.Mutex{}
 	connections_m = make(map[string]int)
 	myID = id
+
+	go UdpListen()
+	go TcpAccept()
+	go UdpBroadcast()
 }
 
 func testErr(err error, msg string) bool {
@@ -29,29 +35,27 @@ func testErr(err error, msg string) bool {
 	return false
 }
 
-func Send(msg []byte, conn net.Conn){
-	_, err := conn.Write(msg)
-	if testErr(err, "") {
-		panic(err)
-	}
+func (c Connection) Send(msg []byte){
+	_, err := c.conn.Write(msg)
+	testErr(err, "Send")
 }
+
 
 func addToMap(ip string) bool {
 	mapTex.Lock()
-	_, ok := connections_m[ip]
-	if ok {
-		mapTex.Unlock()
+	defer mapTex.Unlock()
+	//Test if already in map
+	if _, ok := connections_m[ip]; ok {
 		return false
 	}
 	connections_m[ip] = 1
-	mapTex.Unlock()
 	return true
 }
 
-func Close(conn net.Conn){
-	ip,_,_ := net.SplitHostPort(conn.RemoteAddr().String())
+func (c Connection) Close(){
+	ip,_,_ := net.SplitHostPort(c.conn.RemoteAddr().String())
 	removeFromMap(ip)
-	conn.Close()
+	c.conn.Close()
 }
 
 func removeFromMap(ip string){
@@ -61,11 +65,11 @@ func removeFromMap(ip string){
 }
 
 
-func TcpListen(conn net.Conn, msg_c chan<- []byte, bufLen uint8){
+func (c Connection) Listen(msg_c chan<- []byte, bufLen uint8){
 	for {
 		buf := make([]byte, bufLen)
-		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-		n, err := conn.Read(buf)
+		c.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		n, err := c.conn.Read(buf)
 		if err != nil || n != int(bufLen){
 
 			if err, ok := err.(net.Error); ok && err.Timeout() {
@@ -79,10 +83,10 @@ func TcpListen(conn net.Conn, msg_c chan<- []byte, bufLen uint8){
 	}
 }
 
-func TcpRead(conn net.Conn, bufLen uint8) []byte{
+func (c Connection) TcpRead(bufLen uint8) []byte{
 	buf := make([]byte, bufLen)
-	conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
-	n, err := conn.Read(buf)
+	c.conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
+	n, err := c.conn.Read(buf)
 	if err != nil || n != int(bufLen){
 
 		if err, ok := err.(net.Error); ok && err.Timeout() {
@@ -96,47 +100,51 @@ func TcpRead(conn net.Conn, bufLen uint8) []byte{
 }
 
 
-//Legg inn i for loop dersom starten failer
 func UdpListen(){
-
-	Addr,err := net.ResolveUDPAddr("udp",":55087")
-    testErr(err, "Couldn't resolve UDP listen")
-
-	SerConn, err := net.ListenUDP("udp", Addr)
-    testErr(err, "Couldn't listen to udp")
-
-    buf := make([]byte, 1024)
-    defer SerConn.Close()
 	for {
-		// connect to this socket
-		_,addr,err := SerConn.ReadFromUDP(buf)
-        
-        if testErr(err, "UDP read failed") || buf[0] >= myID {
-            continue
-        }
+		Addr,err := net.ResolveUDPAddr("udp",":55087")
+	    if testErr(err, "Couldn't resolve UDP listen") {
+	    	continue
+	    }
 
-		ip,_,_ := net.SplitHostPort(addr.String())
-        if !addToMap(ip) {
-        	continue
-        }
+		SerConn, err := net.ListenUDP("udp", Addr)
+	    if testErr(err, "Couldn't listen to udp") {
+	    	continue
+	    }
 
-		var conn net.Conn
-		for i := 0; i < 3; i++ {
-			conn, err = net.Dial("tcp", ip + ":4487")
+	    buf := make([]byte, 1024)
+	    defer SerConn.Close()
+		for {
+			// connect to this socket
+			_,addr,err := SerConn.ReadFromUDP(buf)
+	        
+	        if testErr(err, "UDP read failed") || buf[0] >= myID {
+	            continue
+	        }
 
-			if !testErr(err, "TCP dial failed") {
-				break
+			ip,_,_ := net.SplitHostPort(addr.String())
+	        if !addToMap(ip) {
+	        	continue
+	        }
+
+			var conn net.Conn
+			for i := 0; i < 3; i++ {
+				conn, err = net.Dial("tcp", ip + ":4487")
+
+				if !testErr(err, "TCP dial failed") {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
 			}
-			time.Sleep(10 * time.Millisecond)
-		}
 
-		if testErr(err, "TCP dial couldn't reach client. Removing from map") {
-			removeFromMap(ip)
-			continue
-		}
+			if testErr(err, "TCP dial couldn't reach client. Removing from map") {
+				removeFromMap(ip)
+				continue
+			}
 
-		fmt.Printf("Connection established, id: %d\n", buf[0])
-		go connectionCallback(conn, true)
+			fmt.Printf("Connection established, id: %d\n", buf[0])
+			go connectionCallback(Connection{conn}, true)
+		}
 	}
 }
 
@@ -180,7 +188,7 @@ func TcpAccept(){
 	        }
 			
 			fmt.Printf("Connected to %s\n", conn.RemoteAddr())
-			go connectionCallback(conn, false)
+			go connectionCallback(Connection{conn}, false)
 		}
 	}
 }

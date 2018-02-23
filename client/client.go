@@ -3,13 +3,13 @@ package client
 import (
 	"bytes"
 	"encoding/binary"
-	"net"
 	"../statemap"
+	"../network"
 	"sync"
 	"fmt"
-	"../network"
 	"time"
 )
+
 //felt må ha stor forbokstav for å kunne bli konvertert fra []byte
 type Msg_t struct{
 	TalkID uint32
@@ -22,7 +22,7 @@ type Msg_t struct{
 type client struct{
 	id uint8
 	smIndex int16
-	conn net.Conn
+	conn com.Connection
 	dc_c chan bool
 	talkDone_c chan uint32
 	msg_c chan []byte
@@ -46,7 +46,6 @@ var myID uint8
 
 func Init(id uint8){
 	talkTex = &sync.Mutex{}
-	com.Start(id, ClientInit)
 	BUFLEN = uint8(binary.Size(Msg_t{}))
 	myID = id
 }
@@ -59,16 +58,15 @@ func testErr(err error, msg string) bool {
 	return false
 }
 
-func ClientInit(conn net.Conn, flag bool){
+func ClientInit(conn com.Connection, flag bool){
 	msg := Msg_t{ClientID: myID, Type: INTRO}
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
-	println(conn.RemoteAddr().String())
-	send(&msg, &client{conn: conn})
+	client{conn: conn}.send(&msg)
 
-	intro := toMsg(com.TcpRead(conn, BUFLEN))
+	intro := toMsg(conn.TcpRead(BUFLEN))
 	if intro == nil || intro.Type != INTRO {
-		com.Close(conn)
+		conn.Close()
 		return
 	}
 	status = &intro.Evt
@@ -89,7 +87,7 @@ func ClientInit(conn net.Conn, flag bool){
 }
 
 func closeClient(c *client){
-	fmt.Printf("Connection to %s closed.\n",c.conn.RemoteAddr().String())
+	fmt.Printf("Connection to %d closed.\n",c.id)
 
 	sm.RemoveNode(c.smIndex)
 	talkTex.Lock()
@@ -100,7 +98,7 @@ func closeClient(c *client){
 
 	//issue that it returns before talks are finished cleaning up?
 	//remove itself from map
-	com.Close(c.conn)
+	c.conn.Close()
 }
 
 func ClientListen(c *client){
@@ -109,7 +107,7 @@ func ClientListen(c *client){
 		TalkCounter++
 	}
 
-	go com.TcpListen(c.conn, c.msg_c, BUFLEN)
+	go c.conn.Listen(c.msg_c, BUFLEN)
 	go Ping_out(TalkCounter, c)
 	TalkCounter+=2
 	
@@ -134,6 +132,7 @@ func ClientListen(c *client){
 				newMsg := &Msg_t{Type: EVT, Evt: *evt}
 				newTalk(newMsg, c, &TalkCounter, true)
 
+			//Needs to be exclusive from closeClient 
 			case id := <- c.talkDone_c:{
 				delete(c.talks_m, id)
 			}
@@ -165,7 +164,16 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 		if recvChan == nil {
 			return false
 		}
-		recvChan <- msg
+		//Try to forward for 5 ms.
+		select {
+		case recvChan <- msg:
+		case <- time.After(5 * time.Millisecond):
+			fmt.Println("Couldn't forward message")
+			//This should only happen if an ack message is assumed received
+			//but two tcp messages got lost, and the third message is actually
+			//received as the getAck times out. Precautinary
+			//Helps with fault tolerance in any case
+		}
 	}
 	return true
 }
@@ -182,46 +190,6 @@ func endTalk(c *client, id uint32){
 	}
 	talkTex.Unlock()
 }
-
-
-func Ping_out(talkID uint32, c *client){
-	msg := Msg_t{TalkID: talkID, Type: PING}
-	for{
-		select {
-		case <- c.dc_c :
-			//client dc
-			return
-		case <- time.After(30 * time.Millisecond) :
-			send(&msg, c)
-		}
-	}
-}
-
-func send(msg *Msg_t, c *client){
-	buf := toBytes(msg)
-	com.Send(buf, c.conn)
-}
-
-func toMsg(data []byte) *Msg_t{
-	var msg Msg_t
-	buf := bytes.NewReader(data)
-	err := binary.Read(buf, binary.BigEndian, &msg)
-	if err != nil {
-		panic(err)
-	}
-	return &msg
-}
-
-
-func toBytes(data *Msg_t) []byte{
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, *data)
-	if testErr(err, "Couldn't convert message") {
-		panic(err)
-	}
-	return buf.Bytes()
-}
-
 
 func runProtocol(msg *Msg_t, talk_c <-chan *Msg_t, c *client, outgoing bool){
 	if outgoing {
@@ -240,28 +208,42 @@ func runProtocol(msg *Msg_t, talk_c <-chan *Msg_t, c *client, outgoing bool){
 	}
 }
 
+func Ping_out(talkID uint32, c *client){
+	msg := Msg_t{TalkID: talkID, Type: PING}
+	for{
+		select {
+		case <- c.dc_c :
+			//client dc
+			return
+		case <- time.After(30 * time.Millisecond) :
+			c.send(&msg)
+		}
+	}
+}
+
+
 func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
-	send(msg, c)
+	c.send(msg)
 	if getACK(msg, talk_c, c) {
 		sm.EvtAccepted(&msg.Evt, c.smIndex)
 	} else {
 		sm.EvtDismissed(&msg.Evt, c.smIndex)
 	}
 	endTalk(c,msg.TalkID)
-	//fmt.Printf("Goroutine ended %d, %d\n", msg.Type, msg.TalkID)
 }
 
 func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 	sm.EvtRegister(&msg.Evt, c.smIndex)
 	sendACK(msg, talk_c, c)
 	endTalk(c,msg.TalkID)
-	//fmt.Printf("Goroutine ended %d, %d\n", msg.Type, msg.TalkID)
 }
 
 
 func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	for {
+		//dc_c and talk_c gets filled by same routine.
+		//No messages will be received after dc_c closes
 		select {
 		case rcvMsg := <- talk_c: 
 			if rcvMsg.Type == ACK {
@@ -269,13 +251,13 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 			} else {
 				fmt.Printf("Talk : %d, Received unexpected message: %d\n", rcvMsg.TalkID, rcvMsg.Type)
 			}
-		case <- c.dc_c :
-			//client dc
+		case <- c.dc_c : //client dc
 			return false
+
 		case <- time.After(40 * time.Millisecond) :
 			//Ack not received
 			fmt.Printf("Ack not received\n")
-			send(msg, c)
+			c.send(msg)
 		}
 	}
 }
@@ -283,19 +265,43 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	//Wait for call to be handled / request for new ack if prev failed
 	msg.Type = ACK
-	send(msg, c)
+	c.send(msg)
 	for {
 		select {
-		case rcvMsg := <- talk_c: 
+		case rcvMsg := <- talk_c:
 			//Ack not received
-			send(msg, c)
+			c.send(msg)
 			fmt.Printf("Talk : %d, Resending: %d\n", rcvMsg.TalkID, rcvMsg.Type)
 		case <- c.dc_c :
 			//client dc
 			return false
-		case <- time.After(100 * time.Millisecond) :
-			//Ack assumed received
+		case <- time.After(1000 * time.Millisecond) :
+			//Ack assumed received (or 25 tcp messages lost?)
 			return true
 		}
 	}
+}
+
+func (c client) send(msg *Msg_t){
+	buf := toBytes(msg)
+	c.conn.Send(buf)
+}
+
+func toMsg(data []byte) *Msg_t{
+	var msg Msg_t
+	buf := bytes.NewReader(data)
+	err := binary.Read(buf, binary.BigEndian, &msg)
+	if err != nil {
+		panic(err)
+	}
+	return &msg
+}
+
+func toBytes(data *Msg_t) []byte{
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, *data)
+	if testErr(err, "Couldn't convert message") {
+		panic(err)
+	}
+	return buf.Bytes()
 }

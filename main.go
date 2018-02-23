@@ -35,8 +35,8 @@ func main() {
 	elev.Init(uint8(idn))
 	client.Init(uint8(idn))
 
-	go com.UdpListen()
-	go com.TcpAccept()
-	com.UdpBroadcast()
+	com.Start(uint8(idn), client.ClientInit)
+
+	for{}
 	
 }
