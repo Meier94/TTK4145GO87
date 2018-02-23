@@ -198,7 +198,7 @@ func toBytes(data *Msg_t) []byte{
 
 
 func TcpListen(c *client, msg_c chan<- *Msg_t){
-	buf := make([]byte, 3)
+	buf := make([]byte, BUFLEN)
 	for {
 		c.conn.SetReadDeadline(time.Now().Add(10000 * time.Millisecond))
 		n, err := c.conn.Read(buf)
