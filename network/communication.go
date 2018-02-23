@@ -175,8 +175,7 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 
 func send(msg *Msg_t, conn net.Conn){
 	buf := toBytes(msg)
-	n, err := conn.Write(buf)
-	println("Sent: ", n)
+	_, err := conn.Write(buf)
 	if testErr(err, "") {
 		panic(err)
 	}
