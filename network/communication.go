@@ -30,7 +30,7 @@ func Start(id uint8, callback func(Connection, bool)){
 
 func testErr(err error, msg string) bool {
 	if err != nil {
-		fmt.Println(msg,err)
+		sm.Print(fmt.Sprintf("%v, %v", msg,err))
 		return true
 	}
 	return false
