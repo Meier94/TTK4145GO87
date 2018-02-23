@@ -69,10 +69,11 @@ func Init(id uint8) bool {
 
 func evtExternalInput(floor int16, buttonType uint8){
 	mutex.Lock()
-	defer mutex.Unlock()
 	sm.Print(fmt.Sprintf("New Order %d, %s",floor, types[buttonType]))
 	orders[floor][buttonType] = true
 	newTarget, newDir := newTarget(currentFloor, currentDir)
+	defer sm.StatusUpdate(floor, newTarget, false)
+	defer mutex.Unlock()
 	defer updateCurrent(currentFloor, newTarget, newDir)
 
 	if newTarget == NONE {
@@ -132,9 +133,9 @@ func evtFloorReached(floor int16){
 	mutex.Lock()
 
 	newTarget, newDir := newTarget(floor, currentDir)
+	sm.Print(fmt.Sprintf("Reached floor: %d New target: %d", floor, newTarget))
 	defer sm.StatusUpdate(floor, newTarget, false)
 	defer mutex.Unlock()
-
 	defer updateCurrent(floor, newTarget, newDir)
 	
 

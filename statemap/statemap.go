@@ -227,7 +227,6 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 			index = i
 		}
 	}
-	Print(fmt.Sprintf("Lowest: %d ", index))
 
 	if index == -1 {
 		return
