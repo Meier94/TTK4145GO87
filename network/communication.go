@@ -74,6 +74,7 @@ func ClientInit(conn net.Conn){
 	var channel chan *Msg_t
 	channel = make(chan *Msg_t)
 	go TcpRead(conn, channel)
+	time.Sleep(time.Millisecond * 500)
 	go send(&msg, conn)
 
 	intro := <- channel
