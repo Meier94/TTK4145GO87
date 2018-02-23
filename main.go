@@ -6,6 +6,7 @@ import (
 	"./network"
 //	"net"
 	"flag"
+	"time"
 	"fmt"
 	"strconv"
 )
@@ -35,5 +36,9 @@ func main() {
 
 	go com.UdpListen()
 	go com.TcpAccept()
-	com.UdpBroadcast()
+	go com.UdpBroadcast()
+	for {
+		println("loop")
+		time.Sleep(time.Second * 100)
+	}
 }
