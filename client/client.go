@@ -64,8 +64,13 @@ func ClientInit(conn com.Connection, flag bool){
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
 	client{conn: conn}.send(&msg)
 
-	intro := toMsg(conn.TcpRead(BUFLEN))
-	if intro == nil || intro.Type != INTRO {
+	in := conn.TcpRead(BUFLEN)
+	if in == nil {
+		conn.Close()
+		return
+	}
+	intro := toMsg(in)
+	if intro.Type != INTRO {
 		conn.Close()
 		return
 	}
