@@ -229,9 +229,9 @@ func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
 	c.send(msg)
 	if getACK(msg, talk_c, c) {
-		sm.EvtAccepted(&msg.Evt, c.smIndex)
+		go sm.EvtAccepted(&msg.Evt, c.smIndex)
 	} else {
-		sm.EvtDismissed(&msg.Evt, c.smIndex)
+		go sm.EvtDismissed(&msg.Evt, c.smIndex)
 	}
 	endTalk(c,msg.TalkID)
 }

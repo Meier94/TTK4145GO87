@@ -314,7 +314,7 @@ func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	sm.orders[floor][buttonType] = index
 	sm.supervisors[floor][buttonType] = supervisor
 	if index == ME {
-		elevAddOrder(floor, buttonType)
+		go elevAddOrder(floor, buttonType)
 	}
 }
 
