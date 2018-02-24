@@ -32,6 +32,11 @@ type nodeInfo struct{
 	send chan *Evt
 }
 
+type ButtonPress struct {
+	Floor int16
+	Type uint8
+}
+
 type Evt struct{
 	Type uint8
 	Floor int16
@@ -55,17 +60,14 @@ type stateMap struct{
 }
 
 var sm = stateMap{}
-
-var elevAddOrder func(int16, uint8)
-
+var elevCh chan<- ButtonPress
 var binit bool = false
 
 
-func Init(id uint8){
+func Init(id uint8, elev_c chan<- ButtonPress){
 	mut = &sync.Mutex{}
-	Print("test")
-	Print("test2")
-	Print("test3")
+
+	elevCh = elev_c
 	sm.mutex = &sync.Mutex{}
 	sm.mutex.Lock()
 	sm.numNodes = 1
@@ -86,10 +88,6 @@ func Init(id uint8){
 	sm.mutex.Unlock()
 }
 
-//External
-func AddFunction(add func(int16, uint8)){
-	elevAddOrder = add
-}
 
 //External
 func EvtAccepted(evt *Evt, index int16){
@@ -314,7 +312,7 @@ func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	sm.orders[floor][buttonType] = index
 	sm.supervisors[floor][buttonType] = supervisor
 	if index == ME {
-		go elevAddOrder(floor, buttonType)
+		elevCh <- ButtonPress{floor, buttonType}
 	}
 }
 

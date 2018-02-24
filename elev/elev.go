@@ -4,7 +4,6 @@ import (
 	"87/elev/io"
 	"87/statemap"
 	"time"
-	"sync"
 	"fmt"
 )
 
@@ -30,9 +29,17 @@ const executing_s = 4
 var types [4]string = [4]string{"Up", "Down", "Cab", "Arrival"}
 
 //variables
-var state int = init_s
+var state int
+
+//current
+var cFloor int16
+var	cTarget int16
+var	cDir uint8
+var open bool
+
 var orders[m][3] bool
-var timer time.Timer
+var timer *time.Timer
+var evt_c chan sm.ButtonPress
 
 
 
@@ -41,17 +48,12 @@ func Init(id uint8) bool {
 		return false
 	}
 	io.ClearAllLights()
-	sm.AddFunction(evtExternalInput)
 
 	timer = time.NewTimer(0 * time.Millisecond)
 	<- timer.C
 
-
-	for i := 0 ; i < int(m) * 3; i++{
-		orders[i / 3][i % 3] = false
-	}
-
-	sm.Init(id)
+	evt_c = make(chan sm.ButtonPress, m*3)
+	sm.Init(id, evt_c)
 
 	io.SetMotor(UP)
 	go triggerEvents()
@@ -60,11 +62,6 @@ func Init(id uint8) bool {
 
 
 func triggerEvents(){
-	var Floor int16 = NONE
-	var Target int16 = NONE
-	var Dir int16 = UP
-	var doorOpen = false
-
 	for {
 		if io.GetInputs() {
 			for {
@@ -74,16 +71,18 @@ func triggerEvents(){
 				}
 				////fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
 				if evtType == FLOOR {
-					Floor, Target, Dir = evtFloorReached(floor, Target, Dir)
+					State.Floor = floor
+					State = evtFloorReached(State)
 					continue
 				}
-				evtButtonPressed(floor, evtType)
+				go sm.AddButtonPress(floor, evtType)
 			}
 		}
 		for data := true; data;{
 			select {
-			case <- evt:
-				Target, Dir = evtExternalInput(evt)
+			case Press := <- evt_c:
+				cTarget, cDir, clearedOrders = evtExternalInput(Press.Floor, Press.Type)
+				go sm.StatusUpdate(cFloor, cTarget, false, clearedOrders)
 			case <- timer.C:
 				evtTimeout(Target, Dir)
 			default:
@@ -96,45 +95,36 @@ func triggerEvents(){
 
 
 
-func evtExternalInput(floor int16, buttonType uint8) int16, uint8{
+func evtExternalInput(floor int16, buttonType uint8) (int16, uint8, [3]bool]) {
 	sm.Print(fmt.Sprintf("New Order %d, %s",floor, types[buttonType]))
 
 	orders[floor][buttonType] = true
-	newTarget, newDir := newTarget(currentFloor, currentDir)
+	nTarget, nDir := newTarget(cFloor, currentDir)
 	
-	go sm.StatusUpdate(currentFloor, newTarget, false)
-
-	if newTarget == NONE {
+	clearedOrders := [3]bool{}
+	if nTarget == NONE {
 		openDoor()
-		go orderComplete(floor, currentDir, newDir)
+		clearedOrders = orderComplete(cFloor, cDir, nDir)
 	}
 
 	switch state {
 	case idle_s:
-		if newTarget != NONE {
-			io.SetMotor(newDir)
+		if nTarget != NONE {
+			io.SetMotor(nDir)
 			state = executing_s
 		}
 	}
-}
-
-func evtButtonPressed(floor int16, buttonType uint8){
-	go sm.AddButtonPress(floor, buttonType)
+	return nTarget, nDir, clearedOrders
 }
 
 
-func evtTimeout(open bool){
-	if stopped {
-		stopped = false
-		return
-	}
-	open = false
+func evtTimeout(){
 
 	io.SetDoorLight(0)
-	if currentTarget != NONE{
-		currentDir := UP
-		if currentFloor > currentTarget {
-			currentDir = DOWN
+	if cTarget != NONE{
+		cDir := UP
+		if cFloor > cTarget {
+			cDir = DOWN
 		}
 		io.SetMotor(currentDir)
 		
@@ -146,33 +136,33 @@ func evtTimeout(open bool){
 }
 
 
-func evtFloorReached(Floor int16, Target int16, Dir uint8){
+func evtFloorReached(s state) state  {
 
-	newTarget, newDir := newTarget(Floor, Dir)
-	sm.Print(fmt.Sprintf("Reached floor: %d New target: %d", Floor, newTarget))
-	go sm.StatusUpdate(Floor, newTarget, false)
+	newTarget, newDir := newTarget(s.Floor, s.Dir)
+	sm.Print(fmt.Sprintf("Reached floor: %d New target: %d", s.Floor, newTarget))
+	go sm.StatusUpdate(s.Floor, newTarget, false)
 
 	switch state {
 	case open_s:
 	case idle_s:
 	default:
-		if currentTarget == Floor{
-			io.SetMotor(STOP)
+		if currentTarget == s.Floor{
 			openDoor()
-			orderComplete(Floor, Dir, newDir)
-			return
+			orderComplete(s.Floor, s.Dir, newDir)
+			break
 		}
-		if currentTarget == NONE {
+		if s.Target == NONE {
 			if newTarget == NONE {
 				io.SetMotor(STOP)
 				state = idle_s
-				return
+				break
 			}
 			io.SetMotor(newDir)
 			state = executing_s
 		}
-		return
+		break
 	}
+	return state{s.Floor, newTarget, newDir}
 	//fmt.Println("Floor reached in wrong state")
 }
 
@@ -183,11 +173,11 @@ func openDoor(open bool)bool{
 	io.SetMotor(STOP)
 	io.SetDoorLight(1)
 
-	//Check if timer returned before 
+	//Try to stop timer
 	if !timer.Stop() {
 		select {
-		case <-timer.C:
-		default:
+		case <-timer.C: //it just completed
+		default:		//it was not running
 		}
 	}
 
@@ -226,19 +216,20 @@ func newTarget(floor int16, dir uint8) (int16, uint8){
 }
 
 //may not do anything
-func orderComplete(floor int16, dir uint8, newDir uint8){
+func orderComplete(floor int16, dir uint8, newDir uint8) [3]bool {
+	out := [3]bool{}
 	if orders[floor][CAB] {
 		orders[floor][CAB] = false
-		go sm.CallComplete(floor, CAB)
+		out[CAB] = true
 	}
 	if orders[floor][dir] {
 		orders[floor][dir] = false
-		go sm.CallComplete(floor, dir)
+		out[dir] = true
 	}
 	if dir != newDir {
 		if orders[floor][1^dir] {
 			orders[floor][1^dir] = false
-			go sm.CallComplete(floor, 1^dir)
+			out[1^dir] = true
 		}
 	}
 }
