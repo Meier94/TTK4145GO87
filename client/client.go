@@ -219,7 +219,7 @@ func Ping_out(talkID uint32, c *client){
 		case <- c.dc_c :
 			//client dc
 			return
-		case <- time.After(30 * time.Millisecond) :
+		case <- time.After(40 * time.Millisecond) :
 			c.send(&msg)
 		}
 	}
@@ -259,7 +259,7 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 				sm.Print(fmt.Sprintf("Talk : %d, Received unexpected message: %d", rcvMsg.TalkID, rcvMsg.Type))
 			}
 
-		case <- time.After(40 * time.Millisecond) :
+		case <- time.After(50 * time.Millisecond) :
 			//Ack not received
 			sm.Print(fmt.Sprintf("Ack not received %d", msg.TalkID))
 			c.send(msg)
