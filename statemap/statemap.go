@@ -349,12 +349,9 @@ func PrintMap(){
 	mut.Lock()
 
 	if !firstRun {
-		for i := 0; i < 10; i++ {
-			fmt.Printf("%c[2K\r",27)
-			fmt.Printf("%c[A", 27)
-		}
+		fmt.Printf("%c[%dA\r",27, 6 + m) 	//up 6+m lines
+		fmt.Printf("%c[J\r",27)				//Clear untill end of screen
 	}
-	fmt.Printf("%c[2K\r",27)
 	firstRun = false
 
 	for i := 0; i <= first; i++ {
