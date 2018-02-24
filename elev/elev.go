@@ -29,13 +29,12 @@ const executing_s = 4
 var types [4]string = [4]string{"Up", "Down", "Cab", "Arrival"}
 
 //variables
-var state int
+var state int = init_s
 
 //current
-var cFloor int16
-var	cTarget int16
-var	cDir uint8
-var open bool
+var cFloor int16 = NONE
+var	cTarget int16 = NONE
+var	cDir uint8 = UP
 
 var orders[m][3] bool
 var timer *time.Timer
@@ -71,8 +70,8 @@ func triggerEvents(){
 				}
 				////fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
 				if evtType == FLOOR {
-					State.Floor = floor
-					State = evtFloorReached(State)
+					clearedOrders := evtFloorReached(floor)
+					go sm.StatusUpdate(cFloor, cTarget, false, clearedOrders)
 					continue
 				}
 				go sm.AddButtonPress(floor, evtType)
@@ -81,10 +80,10 @@ func triggerEvents(){
 		for data := true; data;{
 			select {
 			case Press := <- evt_c:
-				cTarget, cDir, clearedOrders = evtExternalInput(Press.Floor, Press.Type)
+				clearedOrders := evtExternalInput(Press.Floor, Press.Type)
 				go sm.StatusUpdate(cFloor, cTarget, false, clearedOrders)
 			case <- timer.C:
-				evtTimeout(Target, Dir)
+				evtTimeout()
 			default:
 				data = false
 			}
@@ -95,11 +94,11 @@ func triggerEvents(){
 
 
 
-func evtExternalInput(floor int16, buttonType uint8) (int16, uint8, [3]bool]) {
+func evtExternalInput(floor int16, buttonType uint8) [3]bool {
 	sm.Print(fmt.Sprintf("New Order %d, %s",floor, types[buttonType]))
 
 	orders[floor][buttonType] = true
-	nTarget, nDir := newTarget(cFloor, currentDir)
+	nTarget, nDir := newTarget(cFloor, cDir)
 	
 	clearedOrders := [3]bool{}
 	if nTarget == NONE {
@@ -114,7 +113,9 @@ func evtExternalInput(floor int16, buttonType uint8) (int16, uint8, [3]bool]) {
 			state = executing_s
 		}
 	}
-	return nTarget, nDir, clearedOrders
+	cDir = nDir
+	cTarget = nTarget
+	return clearedOrders
 }
 
 
@@ -126,7 +127,7 @@ func evtTimeout(){
 		if cFloor > cTarget {
 			cDir = DOWN
 		}
-		io.SetMotor(currentDir)
+		io.SetMotor(cDir)
 		
 		state = executing_s
 		return
@@ -136,39 +137,40 @@ func evtTimeout(){
 }
 
 
-func evtFloorReached(s state) state  {
-	sm.Print(fmt.Sprintf("Reached floor: %d New target: %d", s.Floor, newTarget))
-
-	newTarget, newDir := newTarget(s.Floor, s.Dir)
+func evtFloorReached(nFloor int16) [3]bool  {
+	nTarget, nDir := newTarget(nFloor, cDir)
+	sm.Print(fmt.Sprintf("Reached %d floor: %d New target: %d", cTarget, nFloor, nTarget))
 
 	clearedOrders := [3]bool{}
 	switch state {
 	case open_s:
 	case idle_s:
 	default:
-		if currentTarget == s.Floor{
+		if cTarget == nFloor{
 			openDoor()
-			orderComplete(s.Floor, s.Dir, newDir)
+			clearedOrders = orderComplete(nFloor, cDir, nDir)
 			break
 		}
-		if s.Target == NONE {
-			if newTarget == NONE {
+		if cTarget == NONE {
+			if nTarget == NONE {
 				io.SetMotor(STOP)
 				state = idle_s
 				break
 			}
-			io.SetMotor(newDir)
+			io.SetMotor(nDir)
 			state = executing_s
 		}
-		break
 	}
-	return state{s.Floor, newTarget, newDir}
+	cDir = nDir
+	cFloor = nFloor
+	cTarget = nTarget
+	return clearedOrders
 	//fmt.Println("Floor reached in wrong state")
 }
 
 
 
-func openDoor(open bool)bool{
+func openDoor(){
 	state = open_s
 	io.SetMotor(STOP)
 	io.SetDoorLight(1)
@@ -181,8 +183,7 @@ func openDoor(open bool)bool{
 		}
 	}
 
-	timer.Reset(time.Second*3, evtTimeout)
-	return true
+	timer.Reset(time.Second*3)
 }
 
 //Returns first in current direction
@@ -217,19 +218,20 @@ func newTarget(floor int16, dir uint8) (int16, uint8){
 
 //may not do anything
 func orderComplete(floor int16, dir uint8, newDir uint8) [3]bool {
-	out := [3]bool{}
+	cleared := [3]bool{}
 	if orders[floor][CAB] {
 		orders[floor][CAB] = false
-		out[CAB] = true
+		cleared[CAB] = true
 	}
 	if orders[floor][dir] {
 		orders[floor][dir] = false
-		out[dir] = true
+		cleared[dir] = true
 	}
 	if dir != newDir {
 		if orders[floor][1^dir] {
 			orders[floor][1^dir] = false
-			out[1^dir] = true
+			cleared[1^dir] = true
 		}
 	}
+	return cleared
 }

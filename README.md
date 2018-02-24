@@ -16,6 +16,7 @@ Thoughts:
 
 	Hva hvis døra er åpen og du får et kall i samme etasje i riktig retning
 
+
 Burde close hver talk_c istedenfor dc_c:
 	Pros:
 	En mindre entry i client

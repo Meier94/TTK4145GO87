@@ -9,6 +9,10 @@ import (
 	"runtime"
 //	"net"
 	"flag"
+	"os"
+	"87/elev/io"
+	"syscall"
+	"os/signal"
 	"time"
 	"fmt"
 	"strconv"
@@ -25,6 +29,15 @@ type HelloMsg struct {
 func main() {
 	// Our id can be anything. Here we pass it on the command line, using
 	//  `go run main.go -id=our_id`
+
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func(){
+	    <- c 
+        io.SetMotor(3)
+        os.Exit(1)
+	}()
+
 	fmt.Println(runtime.Version())
 	var ids string
 	flag.StringVar(&ids, "id", "", "id of this peer")

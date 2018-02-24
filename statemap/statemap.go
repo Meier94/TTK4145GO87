@@ -44,6 +44,7 @@ type Evt struct{
 	Button uint8
 	Stuck bool
 	Supervise bool
+	Cleared [3]bool
 }
 
 type orderParticipants struct{
@@ -127,13 +128,14 @@ func EvtRegister(evt *Evt, index int16){
 			addOrder(evt.Floor, evt.Button, 0, index)
 		}
 
-	case CALL_COMPLETE :
-		removeOrder(evt.Floor, evt.Button)
-
 	case STATE :
 		sm.nodes[index].floor = evt.Floor
 		sm.nodes[index].target = evt.Target
 		sm.nodes[index].stuck = evt.Stuck
+
+		evt.Cleared[CAB] = false
+		removeOrders(evt.Floor, evt.Cleared)
+
 		if evt.Stuck {
 			redistributeOrders(index, false)
 		}
@@ -175,25 +177,18 @@ func GetState(index int16) (int16, int16, bool){
 	return floor, target, stuck
 }
 
-//External
-func CallComplete(floor int16, buttonType uint8){
-	sm.mutex.Lock()
-	evt := &Evt{Type: CALL_COMPLETE, Floor: floor, Button: buttonType}
-	if id := sm.supervisors[floor][buttonType]; id != NONE {
-		sm.nodes[id].send <- evt
-	}
-	removeOrder(floor, buttonType)
-	sm.mutex.Unlock()
-}
 
 //External
-func StatusUpdate(floor int16, target int16, stuck bool){
+func StatusUpdate(floor int16, target int16, stuck bool, cleared [3]bool){
 	sm.mutex.Lock()
 
 	sm.nodes[ME].floor = floor
 	sm.nodes[ME].target = target
 	sm.nodes[ME].stuck = stuck
-	evt := &Evt{Type: STATE, Floor: floor, Target: target, Stuck: stuck}
+
+	removeOrders(floor, cleared)
+
+	evt := &Evt{Type: STATE, Floor: floor, Target: target, Stuck: stuck, Cleared: cleared}
 	for i := uint8(1); i < sm.numNodes; i++ {
 		sm.nodes[i].send <- evt
 	}
@@ -317,10 +312,19 @@ func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 }
 
 //internal
-func removeOrder(floor int16, buttonType uint8){
-	sm.orders[floor][buttonType] = NONE
-	sm.orders[floor][CAB] = NONE
-	sm.supervisors[floor][buttonType] = NONE
+func removeOrders(floor int16, clear [3]bool){
+	if clear[UP] {
+		sm.orders[floor][UP] = NONE
+		sm.supervisors[floor][UP] = NONE
+	}
+	if clear[DOWN] {
+		sm.orders[floor][DOWN] = NONE
+		sm.supervisors[floor][DOWN] = NONE
+	}
+	if clear[CAB] {
+		sm.orders[floor][CAB] = NONE
+		sm.supervisors[floor][CAB] = NONE
+	}
 }
 
 
