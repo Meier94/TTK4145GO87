@@ -58,6 +58,8 @@ var sm = stateMap{}
 
 var elevAddOrder func(int16, uint8)
 
+var binit bool = false
+
 
 func Init(id uint8){
 	mut = &sync.Mutex{}
@@ -80,6 +82,7 @@ func Init(id uint8){
 
 
 	//AddOrdersFromFile(&sm)
+	binit = true
 	sm.mutex.Unlock()
 }
 
@@ -334,13 +337,16 @@ var strings [numstrings]string
 var firstRun = true
 
 func Print(s string){
-	mut.Lock()
-	first = (first + 1)%numstrings
-	strings[first] = s
-	mut.Unlock()
+	if binit {
+		sm.mutex.Lock()
+		first = (first + 1)%numstrings
+		strings[first] = s
+		sm.mutex.Unlock()
+	}
 }
 
 func PrintMap(){
+	sm.mutex.Lock()
 
 	if !firstRun {
 		for i := 0; i < numstrings + 10; i++ {
@@ -385,7 +391,6 @@ func PrintMap(){
 
 	fmt.Printf("\n");
 
-	mut.Lock()
 	index := first
 	for i := 0; i < numstrings; i++ {
 		index = (first - i) % numstrings
@@ -394,5 +399,5 @@ func PrintMap(){
 		}
 		fmt.Println(strings[index])
 	}
-	mut.Unlock()
+	sm.mutex.Unlock()
 }

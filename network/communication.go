@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 	"sync"
-	"../statemap"
+	"87/statemap"
 )
 
 type Connection struct{

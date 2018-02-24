@@ -1,8 +1,8 @@
 package elev
 
 import (
-	"./io"
-	"../statemap"
+	"87/elev/io"
+	"87/statemap"
 	"time"
 	"sync"
 	"fmt"

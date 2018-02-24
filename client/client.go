@@ -3,8 +3,8 @@ package client
 import (
 	"bytes"
 	"encoding/binary"
-	"../statemap"
-	"../network"
+	"87/statemap"
+	"87/network"
 	"sync"
 	"fmt"
 	"time"
