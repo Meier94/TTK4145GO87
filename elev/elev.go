@@ -232,16 +232,16 @@ func newTarget(floor int16, dir uint8) (int16, uint8){
 func orderComplete(floor int16, dir uint8, newDir uint8){
 	if orders[floor][CAB] {
 		orders[floor][CAB] = false
-		sm.CallComplete(floor, CAB)
+		go sm.CallComplete(floor, CAB)
 	}
 	if orders[floor][dir] {
 		orders[floor][dir] = false
-		sm.CallComplete(floor, dir)
+		go sm.CallComplete(floor, dir)
 	}
 	if dir != newDir {
 		if orders[floor][1^dir] {
 			orders[floor][1^dir] = false
-			sm.CallComplete(floor, 1^dir)
+			go sm.CallComplete(floor, 1^dir)
 		}
 	}
 }
