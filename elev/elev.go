@@ -100,15 +100,14 @@ func evtButtonPressed(floor int16, buttonType uint8){
 
 
 func evtTimeout(){
-	timeTex.Lock()
-	defer timeTex.Unlock()
+	mutex.Lock()
+	defer mutex.Unlock()
 	if stopped {
 		stopped = false
 		return
 	}
 	open = false
-	mutex.Lock()
-	defer mutex.Unlock()
+
 	io.SetDoorLight(0)
 	if currentTarget != NONE{
 		currentDir := UP
@@ -191,13 +190,11 @@ func triggerEvents(){
 func openDoor(){
 	state = open_s
 	io.SetDoorLight(1)
-	timeTex.Lock()
 	if open {
 		stopped = !timer.Stop()
 	}
 	open = true
 	timer = time.AfterFunc(time.Second*3, evtTimeout)
-	timeTex.Unlock()
 	io.SetMotor(STOP)
 }
 
