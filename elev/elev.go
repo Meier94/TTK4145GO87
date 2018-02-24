@@ -149,9 +149,7 @@ func evtFloorReached(floor int16){
 		if currentTarget == floor{
 			io.SetMotor(STOP)
 			openDoor()
-			sm.Print(fmt.Sprintf("ordercomplete1"))
 			go orderComplete(floor, currentDir, newDir)
-			sm.Print(fmt.Sprintf("ordercomplete2"))
 			return
 		}
 		if currentTarget == NONE {

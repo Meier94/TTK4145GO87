@@ -195,11 +195,12 @@ func StatusUpdate(floor int16, target int16, stuck bool) int16{
 	sm.nodes[ME].floor = floor
 	sm.nodes[ME].target = target
 	sm.nodes[ME].stuck = stuck
-
+	Print(fmt.Sprintf("started sending evt"))
 	evt := &Evt{Type: STATE, Floor: floor, Target: target, Stuck: stuck}
 	for i := uint8(1); i < sm.numNodes; i++ {
 		sm.nodes[i].send <- evt
 	}
+	Print(fmt.Sprintf("finished sending evt"))
 	sm.mutex.Unlock()
 	return target
 }
