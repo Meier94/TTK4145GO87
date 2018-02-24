@@ -237,6 +237,7 @@ func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 }
 
 func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
+	sm.Print(fmt.Sprintf("Talk started %d", msg.TalkID))
 	sm.EvtRegister(&msg.Evt, c.smIndex)
 	sendACK(msg, talk_c, c)
 	endTalk(c,msg.TalkID)
