@@ -237,15 +237,11 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 	if index == 0{
 		if sm.numNodes > 1 {
 			evt.Supervise = true
-			Print(fmt.Sprintf("førsend"))
 			sm.nodes[1].send <- &evt
-			Print(fmt.Sprintf(""))
 		}
 	}else{
 		evt.Supervise = false
-		Print(fmt.Sprintf("førsend"))
 		sm.nodes[index].send <- &evt
-		Print(fmt.Sprintf(""))
 	}
 }
 
