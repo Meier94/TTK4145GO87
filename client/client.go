@@ -245,6 +245,7 @@ func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
 
 func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
+	missed := false
 	for {
 		//dc_c and talk_c gets filled by same routine.
 		//No messages will be received after dc_c closes
@@ -261,7 +262,10 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 
 		case <- time.After(50 * time.Millisecond) :
 			//Ack not received
-			sm.Print(fmt.Sprintf("Ack not received %d", msg.TalkID))
+			if !missed {
+				sm.Print(fmt.Sprintf("Ack not received %d", msg.TalkID))
+				missed = true
+			}
 			c.send(msg)
 		}
 	}
