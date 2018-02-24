@@ -288,6 +288,7 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 			sm.Print(fmt.Sprintf("Talk : %d, resending Ack", rcvMsg.TalkID))
 		case <- time.After(100 * time.Millisecond) :
 			//Ack assumed received (or 3 tcp messages lost?)
+			sm.Print(fmt.Sprintf("Talk : %d, assuming ack received", rcvMsg.TalkID))
 			return true
 		}
 	}
