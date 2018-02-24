@@ -185,7 +185,6 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 
 func endTalk(c *client, id uint32){
 	sm.Print(fmt.Sprintf("Talk ended1 %d", id))
-	talkTex.Unlock()
 	talkTex.Lock()
 	delete(c.talks_m, id)
 	talks--
