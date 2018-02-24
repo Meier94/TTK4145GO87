@@ -5,7 +5,7 @@ import (
 	"87/elev"
 	"87/network"
 	"87/client"
-//	"87/statemap"
+	"87/statemap"
 	"runtime"
 //	"net"
 	"flag"
@@ -43,7 +43,7 @@ func main() {
 	com.Start(id, client.ClientInit)
 
 	for{
-		//sm.PrintMap()
+		sm.PrintMap()
 		time.Sleep(400*time.Millisecond)
 	}
 	

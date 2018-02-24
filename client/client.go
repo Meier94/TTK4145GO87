@@ -76,8 +76,8 @@ func ClientInit(conn com.Connection, flag bool){
 	cli.conn 		= conn
 	cli.talkDone_c  = make(chan uint32)
 	cli.dc_c 		= make(chan bool)
-	cli.evt_c 		= make(chan *sm.Evt)
-	cli.msg_c 		= make(chan []byte)
+	cli.evt_c 		= make(chan *sm.Evt, 10)
+	cli.msg_c 		= make(chan []byte, 10)
 	cli.talks_m 	= make(map[uint32]chan *Msg_t)
 	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
 
