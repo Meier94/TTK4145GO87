@@ -172,7 +172,7 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 		select {
 		case recvChan <- msg:
 		case <- time.After(100 * time.Microsecond):
-			sm.Print(fmt.Sprintf("Couldn't forward message"))
+			sm.Print(fmt.Sprintf("Couldn't forward message: %d", msg.TalkID))
 			//This should only happen if an ack message is assumed received
 			//but two tcp messages got lost, and the third message is actually
 			//received as the getAck times out. Precautinary
@@ -190,6 +190,7 @@ func endTalk(c *client, id uint32){
 	if talks == 0{
 		//fmt.Println("No talks active")
 	}
+	sm.Print(fmt.Sprintf("Talk ended %d", id))
 	talkTex.Unlock()
 }
 
