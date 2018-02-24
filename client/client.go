@@ -283,7 +283,7 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 			//Ack not received (received duplicate message)
 			c.send(msg)
 			sm.Print(fmt.Sprintf("Talk : %d, resending Ack", rcvMsg.TalkID))
-		case <- time.After(1000 * time.Millisecond) :
+		case <- time.After(100 * time.Millisecond) :
 			//Ack assumed received (or 3 tcp messages lost?)
 			return true
 		}
