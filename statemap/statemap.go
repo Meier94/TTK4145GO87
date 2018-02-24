@@ -330,8 +330,8 @@ func removeOrder(floor int16, buttonType uint8){
 
 //Would have preferred to lock the map while printing but it is slow
 //Any concurrent write to the statemap will manifest only in the printed output
-var first int = 0
-const numstrings = 8
+var first int = -1
+const numstrings = 80
 var mut *sync.Mutex
 var strings [numstrings]string
 var firstRun = true
@@ -339,8 +339,10 @@ var firstRun = true
 func Print(s string){
 	if binit {
 		mut.Lock()
-		first = (first + 1)%numstrings
-		strings[first] = s
+		first++
+		if first < numstrings {
+			strings[first] = s
+		}
 		mut.Unlock()
 	}
 }
@@ -349,12 +351,18 @@ func PrintMap(){
 	mut.Lock()
 
 	if !firstRun {
-		for i := 0; i < numstrings + 10; i++ {
+		for i := 0; i < 10; i++ {
 			fmt.Printf("%c[2K\r",27)
 			fmt.Printf("%c[A", 27)
 		}
 	}
+	fmt.Printf("%c[2K\r",27)
 	firstRun = false
+
+	for i := 0; i <= first; i++ {
+		fmt.Println(strings[i])
+	}
+	first = -1
 
 	num := int(sm.numNodes)
 	fmt.Printf(" F  - | U , D , C | \n");
@@ -390,14 +398,5 @@ func PrintMap(){
 	}
 
 	fmt.Printf("\n");
-
-	index := first
-	for i := 0; i < numstrings; i++ {
-		index = (first - i) % numstrings
-		if index < 0 {
-			index = numstrings + index
-		}
-		fmt.Println(strings[index])
-	}
 	mut.Unlock()
 }
