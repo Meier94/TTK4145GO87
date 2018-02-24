@@ -182,9 +182,7 @@ func CallComplete(floor int16, buttonType uint8){
 	sm.mutex.Lock()
 	evt := &Evt{Type: CALL_COMPLETE, Floor: floor, Button: buttonType}
 	if id := sm.supervisors[floor][buttonType]; id != NONE {
-		Print(fmt.Sprintf("førsend"))
 		sm.nodes[id].send <- evt
-		Print(fmt.Sprintf("ettersend"))
 	}
 	removeOrder(floor, buttonType)
 	sm.mutex.Unlock()
@@ -197,14 +195,10 @@ func StatusUpdate(floor int16, target int16, stuck bool){
 	sm.nodes[ME].floor = floor
 	sm.nodes[ME].target = target
 	sm.nodes[ME].stuck = stuck
-	Print(fmt.Sprintf("started sending evt"))
 	evt := &Evt{Type: STATE, Floor: floor, Target: target, Stuck: stuck}
 	for i := uint8(1); i < sm.numNodes; i++ {
-		Print(fmt.Sprintf("førsend"))
 		sm.nodes[i].send <- evt
-		Print(fmt.Sprintf("ettersend"))
 	}
-	Print(fmt.Sprintf("finished sending evt"))
 	sm.mutex.Unlock()
 }
 
@@ -245,13 +239,13 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 			evt.Supervise = true
 			Print(fmt.Sprintf("førsend"))
 			sm.nodes[1].send <- &evt
-			Print(fmt.Sprintf("ettersend"))
+			Print(fmt.Sprintf(""))
 		}
 	}else{
 		evt.Supervise = false
 		Print(fmt.Sprintf("førsend"))
 		sm.nodes[index].send <- &evt
-		Print(fmt.Sprintf("ettersend"))
+		Print(fmt.Sprintf(""))
 	}
 }
 

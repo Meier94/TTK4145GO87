@@ -258,7 +258,7 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 				sm.Print(fmt.Sprintf("Talk : %d, Received unexpected message: %d", rcvMsg.TalkID, rcvMsg.Type))
 			}
 
-		case <- time.After(50 * time.Millisecond) :
+		case <- time.After(30 * time.Millisecond) :
 			//Ack not received
 			if !missed {
 				sm.Print(fmt.Sprintf("Ack not received %d, Evt: %d, Floor:%d, Target%d, Button: %d", msg.TalkID, msg.Evt.Type, msg.Evt.Floor, msg.Evt.Target, msg.Evt.Button))
@@ -273,18 +273,17 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	//Wait for call to be handled / request for new ack if prev failed
 	msg.Type = ACK
 	c.send(msg)
-	sm.Print(fmt.Sprintf("Ack sent %d", msg.TalkID))
 	for {
 		select {
 		case rcvMsg, ok := <- talk_c:
 			if !ok {
 				return false
 			}
-			//Ack not received
+			//Ack not received (received duplicate message)
 			c.send(msg)
 			sm.Print(fmt.Sprintf("Talk : %d, resending Ack", rcvMsg.TalkID))
-		case <- time.After(1000 * time.Millisecond) :
-			//Ack assumed received (or 25 tcp messages lost?)
+		case <- time.After(100 * time.Millisecond) :
+			//Ack assumed received (or 3 tcp messages lost?)
 			return true
 		}
 	}
