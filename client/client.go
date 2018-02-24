@@ -135,11 +135,6 @@ func ClientListen(c *client){
 			case evt := <- c.evt_c :
 				newMsg := &Msg_t{Type: EVT, Evt: *evt}
 				newTalk(newMsg, c, &TalkCounter, true)
-
-			//Needs to be exclusive from closeClient 
-			case id := <- c.talkDone_c:{
-				delete(c.talks_m, id)
-			}
 		}
 	}
 }
@@ -185,9 +180,7 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 
 func endTalk(c *client, id uint32){
 	talkTex.Lock()
-	if c.talkDone_c != nil {
-		c.talkDone_c <- id
-	}
+	delete(c.talks_m, id)
 	talks--
 	if talks == 0{
 		//fmt.Println("No talks active")
