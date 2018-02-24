@@ -275,6 +275,7 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	//Wait for call to be handled / request for new ack if prev failed
 	msg.Type = ACK
 	c.send(msg)
+	sm.Print(fmt.Sprintf("Ack sent %d", msg.TalkID))
 	for {
 		select {
 		case rcvMsg, ok := <- talk_c:
