@@ -168,7 +168,7 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 		if recvChan == nil {
 			return false
 		}
-		//Try to forward for 5 ms.
+		//Try to forward for at least 100 us.
 		select {
 		case recvChan <- msg:
 		case <- time.After(100 * time.Microsecond):
@@ -184,13 +184,15 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 
 
 func endTalk(c *client, id uint32){
+	sm.Print(fmt.Sprintf("Talk ended1 %d", id))
+	talkTex.Unlock()
 	talkTex.Lock()
 	delete(c.talks_m, id)
 	talks--
 	if talks == 0{
 		//fmt.Println("No talks active")
 	}
-	sm.Print(fmt.Sprintf("Talk ended %d", id))
+	sm.Print(fmt.Sprintf("Talk ended2 %d", id))
 	talkTex.Unlock()
 }
 
