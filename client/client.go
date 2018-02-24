@@ -184,7 +184,6 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 
 
 func endTalk(c *client, id uint32){
-	sm.Print(fmt.Sprintf("Talk ended1 %d", id))
 	talkTex.Lock()
 	delete(c.talks_m, id)
 	talks--
@@ -227,7 +226,7 @@ func Ping_out(talkID uint32, c *client){
 
 
 func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-
+	sm.Print(fmt.Sprintf("Talk started %d", msg.TalkID))
 	c.send(msg)
 	if getACK(msg, talk_c, c) {
 		go sm.EvtAccepted(&msg.Evt, c.smIndex)
