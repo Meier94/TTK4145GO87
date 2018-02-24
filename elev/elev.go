@@ -136,7 +136,9 @@ func evtFloorReached(floor int16){
 
 	newTarget, newDir := newTarget(floor, currentDir)
 	sm.Print(fmt.Sprintf("Reached floor: %d New target: %d", floor, newTarget))
-	defer sm.StatusUpdate(floor, newTarget, false)
+	defer func(){
+		go sm.StatusUpdate(floor, newTarget, false)
+	}()
 	defer mutex.Unlock()
 	defer updateCurrent(floor, newTarget, newDir)
 	
