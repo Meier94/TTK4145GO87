@@ -226,7 +226,7 @@ func Ping_out(talkID uint32, c *client){
 
 
 func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-	sm.Print(fmt.Sprintf("Talk started %d", msg.TalkID))
+	sm.Print(fmt.Sprintf("Talk started send %d", msg.TalkID))
 	c.send(msg)
 	if getACK(msg, talk_c, c) {
 		go sm.EvtAccepted(&msg.Evt, c.smIndex)
@@ -237,7 +237,7 @@ func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 }
 
 func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-	sm.Print(fmt.Sprintf("Talk started %d", msg.TalkID))
+	sm.Print(fmt.Sprintf("Talk started recv %d", msg.TalkID))
 	sm.EvtRegister(&msg.Evt, c.smIndex)
 	sendACK(msg, talk_c, c)
 	endTalk(c,msg.TalkID)
