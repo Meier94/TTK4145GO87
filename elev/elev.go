@@ -137,11 +137,11 @@ func evtTimeout(){
 
 
 func evtFloorReached(s state) state  {
+	sm.Print(fmt.Sprintf("Reached floor: %d New target: %d", s.Floor, newTarget))
 
 	newTarget, newDir := newTarget(s.Floor, s.Dir)
-	sm.Print(fmt.Sprintf("Reached floor: %d New target: %d", s.Floor, newTarget))
-	go sm.StatusUpdate(s.Floor, newTarget, false)
 
+	clearedOrders := [3]bool{}
 	switch state {
 	case open_s:
 	case idle_s:
