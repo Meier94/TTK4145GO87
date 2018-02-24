@@ -263,7 +263,7 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 		case <- time.After(50 * time.Millisecond) :
 			//Ack not received
 			if !missed {
-				sm.Print(fmt.Sprintf("Ack not received %d", msg.TalkID))
+				sm.Print(fmt.Sprintf("Ack not received %d, Evt: %d, Floor:%d, Target%d, Button: %d", msg.TalkID, msg.Evt.Type, msg.Evt.Floor, msg.Evt.Target, msg.Evt.Button))
 				missed = true
 			}
 			c.send(msg)

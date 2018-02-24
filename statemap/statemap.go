@@ -189,7 +189,7 @@ func CallComplete(floor int16, buttonType uint8){
 }
 
 //External
-func StatusUpdate(floor int16, target int16, stuck bool) int16{
+func StatusUpdate(floor int16, target int16, stuck bool){
 	sm.mutex.Lock()
 
 	sm.nodes[ME].floor = floor
@@ -202,7 +202,6 @@ func StatusUpdate(floor int16, target int16, stuck bool) int16{
 	}
 	Print(fmt.Sprintf("finished sending evt"))
 	sm.mutex.Unlock()
-	return target
 }
 
 //External
