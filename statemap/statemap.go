@@ -337,12 +337,13 @@ var strings [numstrings]string
 var firstRun = true
 
 func Print(s string){
+	fmt.Println(s)/*
 	if binit {
 		sm.mutex.Lock()
 		first = (first + 1)%numstrings
 		strings[first] = s
 		sm.mutex.Unlock()
-	}
+	}*/
 }
 
 func PrintMap(){
