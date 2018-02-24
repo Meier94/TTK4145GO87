@@ -171,13 +171,13 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 		//Try to forward for 5 ms.
 		select {
 		case recvChan <- msg:
-		case <- time.After(100 * time.Microsecond):
+		/*case <- time.After(100 * time.Microsecond):
 			//fmt.Println("Couldn't forward message")
 			//This should only happen if an ack message is assumed received
 			//but two tcp messages got lost, and the third message is actually
 			//received as the getAck times out. Precautinary
 			//Helps with fault tolerance in any case
-		}
+		}*/
 	}
 	return true
 }
