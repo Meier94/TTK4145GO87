@@ -86,7 +86,7 @@ func ClientInit(conn com.Connection, flag bool){
 	cli.talks_m 	= make(map[uint32]chan *Msg_t)
 	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
 
-	sm.Print(fmt.Sprintf("Node added, Floor: %d, Target: %d, Stuck: %t, ID: %d", status.Floor, status.Target, status.Stuck, cli.id))
+	sm.Print(fmt.Sprintf("Added node with id: %d", status.Floor, status.Target, status.Stuck, cli.id))
 
 	go ClientListen(&cli)
 }
@@ -192,7 +192,6 @@ func endTalk(c *client, id uint32){
 	if talks == 0{
 		//fmt.Println("No talks active")
 	}
-	sm.Print(fmt.Sprintf("Talk ended2 %d", id))
 	talkTex.Unlock()
 }
 
@@ -228,7 +227,6 @@ func Ping_out(talkID uint32, c *client){
 
 
 func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-	sm.Print(fmt.Sprintf("Talk started send %d", msg.TalkID))
 	c.send(msg)
 	if getACK(msg, talk_c, c) {
 		go sm.EvtAccepted(&msg.Evt, c.smIndex)
@@ -239,7 +237,6 @@ func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 }
 
 func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
-	sm.Print(fmt.Sprintf("Talk started recv %d", msg.TalkID))
 	go sm.EvtRegister(&msg.Evt, c.smIndex)
 	sendACK(msg, talk_c, c)
 	endTalk(c,msg.TalkID)
@@ -247,48 +244,50 @@ func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 
 
 func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
-	missed := false
+	attempts := 0
 	for {
-		//dc_c and talk_c gets filled by same routine.
-		//No messages will be received after dc_c closes
 		select {
 		case rcvMsg, ok := <- talk_c:
 			if !ok {
+				//Client closed
 				return false
 			}
 			if rcvMsg.Type == ACK {
 				return true
 			} else {
-				sm.Print(fmt.Sprintf("Talk : %d, Received unexpected message: %d", rcvMsg.TalkID, rcvMsg.Type))
+				sm.Print(fmt.Sprintf("Talk : %d, received unexpected message", rcvMsg.TalkID))
 			}
 
 		case <- time.After(30 * time.Millisecond) :
 			//Ack not received
-			if !missed {
-				sm.Print(fmt.Sprintf("Ack not received %d, Type: %d, Evt: %d, Floor:%d, Target%d, Button: %d", msg.TalkID, msg.Type, msg.Evt.Type, msg.Evt.Floor, msg.Evt.Target, msg.Evt.Button))
-				missed = true
+			sm.Print(fmt.Sprintf("Talk: %d, ack not received", msg.TalkID))
+			if attempts == 3 {
+				//Failed to receive ack 3 times, try to recover
+				return false
 			}
+			attempts++
 			c.send(msg)
 		}
 	}
 }
 
 func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
-	//Wait for call to be handled / request for new ack if prev failed
 	msg.Type = ACK
 	c.send(msg)
+
+	//Listen for further messages (in case the ack got lost)
 	for {
 		select {
 		case rcvMsg, ok := <- talk_c:
 			if !ok {
+				//Client closed
 				return false
 			}
 			//Ack not received (received duplicate message)
 			c.send(msg)
 			sm.Print(fmt.Sprintf("Talk : %d, resending Ack", rcvMsg.TalkID))
 		case <- time.After(100 * time.Millisecond) :
-			//Ack assumed received (or 3 tcp messages lost?)
-			sm.Print(fmt.Sprintf("Talk : %d, assuming ack received", msg.TalkID))
+			//Ack assumed received (or 3-4 tcp messages lost?)
 			return true
 		}
 	}

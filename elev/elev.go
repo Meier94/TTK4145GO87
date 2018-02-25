@@ -36,6 +36,7 @@ var cFloor int16 = NONE
 var	cTarget int16 = NONE
 var	cDir uint8 = UP
 
+
 var orders[m][3] bool
 var timer *time.Timer
 var evt_c chan sm.ButtonPress
@@ -93,7 +94,6 @@ func triggerEvents(){
 }
 
 
-
 func evtExternalInput(floor int16, buttonType uint8) [3]bool {
 	sm.Print(fmt.Sprintf("New Order %d, %s",floor, types[buttonType]))
 
@@ -139,7 +139,6 @@ func evtTimeout(){
 
 func evtFloorReached(nFloor int16) [3]bool  {
 	nTarget, nDir := newTarget(nFloor, cDir)
-	sm.Print(fmt.Sprintf("Reached %d floor: %d New target: %d", cTarget, nFloor, nTarget))
 
 	clearedOrders := [3]bool{}
 	switch state {
@@ -165,7 +164,6 @@ func evtFloorReached(nFloor int16) [3]bool  {
 	cFloor = nFloor
 	cTarget = nTarget
 	return clearedOrders
-	//fmt.Println("Floor reached in wrong state")
 }
 
 
@@ -178,7 +176,7 @@ func openDoor(){
 	//Try to stop timer
 	if !timer.Stop() {
 		select {
-		case <-timer.C: //it just completed
+		case <-timer.C: //it just completed (evtTimeout() will not run)
 		default:		//it was not running
 		}
 	}
