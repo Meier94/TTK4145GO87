@@ -209,7 +209,9 @@ func StatusUpdate(floor int16, target int16, stuck bool, cleared [3]bool){
 //External
 func AddButtonPress(floor int16, buttonType uint8){
 	sm.mutex.Lock()
-	delegateButtonPress(floor, buttonType)
+	if sm.orders[floor][buttonType] == NONE {
+		delegateButtonPress(floor, buttonType)
+	}
 	sm.mutex.Unlock()
 }
 
@@ -302,7 +304,7 @@ func redistributeOrders(index int16, removed bool) {
 	for f := int16(0); f < m; f++ {
 		if sm.orders[f][UP] == index{
 			//Supervisor will handle call. If unsupervised, delegate
-			if stuck && index == ME && sm.orders[f][UP] != NONE {
+			if stuck && index == ME && sm.supervisors[f][UP] != NONE {
 				continue
 			}
 			sm.orders[f][UP] = NONE
@@ -311,7 +313,7 @@ func redistributeOrders(index int16, removed bool) {
 		}
 		if sm.orders[f][DOWN] == index{
 			//Supervisor will handle call. If unsupervised, delegate
-			if stuck && index == ME && sm.orders[f][UP] != NONE {
+			if stuck && index == ME && sm.supervisors[f][DOWN] != NONE {
 				continue
 			}
 			sm.orders[f][DOWN] = NONE

@@ -6,15 +6,13 @@ https://github.com/TTK4145/Project
 
 
 Thoughts:
-	Hva skjer dersom du er stuck med ordre og du kobler deg til din første node
+	Solved: Hva skjer dersom du er stuck med ordre og du kobler deg til din første node
 
 	Hva hvis du får et kall fra en etasje og du allerede vet at ordren oppfylles
 
-	Flytt C. funksjonene til io.go
+	Solved: Flytt C. funksjonene til io.go
 
-	Er i 3. trykker ned 2. trykker opp 1. Heis stopper i 2. Dette intended?
-
-	Hva hvis døra er åpen og du får et kall i samme etasje i riktig retning
+	Solved: Hva hvis døra er åpen og du får et kall i samme etasje i riktig retning
 
 
 Burde close hver talk_c istedenfor dc_c:

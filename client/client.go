@@ -87,7 +87,7 @@ func ClientInit(conn com.Connection, flag bool){
 	cli.talks_m 	= make(map[uint32]chan *Msg_t)
 	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
 
-	print.Format("Added node with id: %d\n", status.Floor, status.Target, status.Stuck, cli.id)
+	print.Format("Added node with id: %d\n", cli.id)
 	go ClientListen(&cli)
 }
 
