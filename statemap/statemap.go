@@ -63,7 +63,9 @@ type stateMap struct{
 
 var sm = stateMap{}
 var elevCh chan<- ButtonPress
-var binit bool = false
+var stashed bool = false
+var stashedOrders [m][2]bool
+
 
 
 func Init(id uint8, elev_c chan<- ButtonPress){
@@ -84,7 +86,6 @@ func Init(id uint8, elev_c chan<- ButtonPress){
 
 
 	//AddOrdersFromFile(&sm)
-	binit = true
 	sm.mutex.Unlock()
 	print.AddStatic(PrintMap)
 }
@@ -152,6 +153,9 @@ func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) in
 	sm.nodes[index].stuck = stuck
 	sm.nodes[index].send = send
 	sm.numNodes++
+	if stashed {
+		releaseStashedOrders()
+	}
 	sm.mutex.Unlock()
 	return index
 }
@@ -184,6 +188,13 @@ func StatusUpdate(floor int16, target int16, stuck bool, cleared [3]bool){
 
 	sm.nodes[ME].floor = floor
 	sm.nodes[ME].target = target
+	if stuck && !sm.nodes[ME].stuck{
+		sm.nodes[ME].stuck = stuck
+		redistributeOrders(ME, stuck)
+	} else if stashed && !stuck {
+		sm.nodes[ME].stuck = stuck
+		releaseStashedOrders()
+	}
 	sm.nodes[ME].stuck = stuck
 
 	removeOrders(floor, cleared)
@@ -206,6 +217,10 @@ func AddButtonPress(floor int16, buttonType uint8){
 //burde kanskje returnere channel bare så fikser elev evt biffen?
 func delegateButtonPress(floor int16, buttonType uint8) {
 	if buttonType == CAB || sm.numNodes == 1{
+		if sm.nodes[0].stuck && buttonType != CAB{
+			stashOrder(floor, buttonType)
+			return
+		}
 		addOrder(floor, buttonType, 0, NONE)
 		return
 	}
@@ -222,9 +237,6 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 		}
 	}
 
-	if index == -1 {
-		return
-	}
 
 	evt := Evt{Type: CALL, Floor: floor, Button: buttonType}
 	if index == 0{
@@ -327,12 +339,33 @@ func removeOrders(floor int16, clear [3]bool){
 	}
 }
 
+//internal
+func stashOrder(floor int16, buttonType uint8){
+	stashed = true
+	stashedOrders[floor][buttonType] = true
+}
+
+//internal
+func releaseStashedOrders(){
+	for f := int16(0); f < m; f++ {
+		if stashedOrders[f][UP]{
+			stashedOrders[f][UP] = false
+			delegateButtonPress(f, UP)
+		}
+		if stashedOrders[f][DOWN]{
+			stashedOrders[f][DOWN] = false
+			delegateButtonPress(f, DOWN)
+		}
+	}
+	stashed = false
+}
+
 
 func PrintMap() int{
 	numlines := 6 + int(m)
 
 	num := int(sm.numNodes)
-	fmt.Printf(" F  - | U , D , C | \n");
+	fmt.Printf("  F - | U , D , C | \n");
 	for f := m-1; f >= 0; f--{
 		fmt.Printf("%3d - |%3d,%3d,%3d|\n",f, sm.orders[f][UP],
 								      		  sm.orders[f][DOWN],

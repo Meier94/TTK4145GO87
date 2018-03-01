@@ -56,7 +56,7 @@ func main() {
 
 	for{
 		print.Display()
-		time.Sleep(400*time.Millisecond)
+		time.Sleep(200*time.Millisecond)
 	}
 	
 }
