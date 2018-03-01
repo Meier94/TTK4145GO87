@@ -4,6 +4,7 @@ package sm
 import (
 	"fmt"
 	"sync"
+	"87/print"
 //	"bytes"
 //	"encoding/binary"
 )
@@ -66,8 +67,6 @@ var binit bool = false
 
 
 func Init(id uint8, elev_c chan<- ButtonPress){
-	mut = &sync.Mutex{}
-
 	elevCh = elev_c
 	sm.mutex = &sync.Mutex{}
 	sm.mutex.Lock()
@@ -87,6 +86,7 @@ func Init(id uint8, elev_c chan<- ButtonPress){
 	//AddOrdersFromFile(&sm)
 	binit = true
 	sm.mutex.Unlock()
+	print.AddStatic(PrintMap)
 }
 
 
@@ -329,9 +329,7 @@ func removeOrders(floor int16, clear [3]bool){
 
 
 func PrintMap() int{
-
-	numlines = 6 + m
-	mut.Lock()
+	numlines := 6 + int(m)
 
 	num := int(sm.numNodes)
 	fmt.Printf(" F  - | U , D , C | \n");
@@ -367,6 +365,5 @@ func PrintMap() int{
 	}
 
 	fmt.Printf("\n");
-	mut.Unlock()
 	return numlines
 }

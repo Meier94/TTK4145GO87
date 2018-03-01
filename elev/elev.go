@@ -3,8 +3,8 @@ package elev
 import (
 	"87/elev/io"
 	"87/statemap"
+	"87/print"
 	"time"
-	"fmt"
 )
 
 const m int16 = 4
@@ -95,7 +95,7 @@ func triggerEvents(){
 
 
 func evtExternalInput(floor int16, buttonType uint8) [3]bool {
-	sm.Print(fmt.Sprintf("New Order %d, %s",floor, types[buttonType]))
+	print.Format("New Order %d, %s\n",floor, types[buttonType])
 
 	orders[floor][buttonType] = true
 	nTarget, nDir := newTarget(cFloor, cDir)

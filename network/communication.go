@@ -2,10 +2,9 @@ package com
 
 import (
 	"net"
-	"fmt"
 	"time"
 	"sync"
-	"87/statemap"
+	"87/print"
 )
 
 type Connection struct{
@@ -30,7 +29,7 @@ func Start(id uint8, callback func(Connection, bool)){
 
 func testErr(err error, msg string) bool {
 	if err != nil {
-		sm.Print(fmt.Sprintf("%v, %v", msg,err))
+		print.Format("%v, %v\n", msg,err)
 		return true
 	}
 	return false
@@ -74,7 +73,7 @@ func (c Connection) Listen(msg_c chan<- []byte, bufLen uint8){
 		if err != nil || n != int(bufLen){
 
 			if err, ok := err.(net.Error); ok && err.Timeout() {
-        		sm.Print(fmt.Sprintf("Timeout caused disconnect"))
+        		print.Format("Timeout caused disconnect\n")
     		}
 			close(msg_c)
 			return
@@ -91,9 +90,9 @@ func (c Connection) TcpRead(bufLen uint8) []byte{
 	if err != nil || n != int(bufLen){
 
 		if err, ok := err.(net.Error); ok && err.Timeout() {
-    		sm.Print(fmt.Sprintf("Tcp read timed out"))
+    		print.Format("Tcp read timed out\n")
 		} else {
-			sm.Print(fmt.Sprintf("Tcp read failed"))
+			print.Format("Tcp read failed\n")
 		}
 		return nil
 	}
@@ -143,7 +142,7 @@ func UdpListen(){
 				continue
 			}
 
-			sm.Print(fmt.Sprintf("Connection established, id: %d", buf[0]))
+			print.Format("Connection established, id: %d\n", buf[0])
 			go connectionCallback(Connection{conn}, true)
 		}
 	}
@@ -188,7 +187,7 @@ func TcpAccept(){
 	        	continue
 	        }
 			
-			sm.Print(fmt.Sprintf("Connected to %s", conn.RemoteAddr()))
+			print.Format("Connected to %s\n", conn.RemoteAddr())
 			go connectionCallback(Connection{conn}, false)
 		}
 	}

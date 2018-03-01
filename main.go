@@ -5,12 +5,11 @@ import (
 	"87/elev"
 	"87/network"
 	"87/client"
-	"87/statemap"
+	"87/elev/io"
+	"87/print"
 	"runtime"
-//	"net"
 	"flag"
 	"os"
-	"87/elev/io"
 	"syscall"
 	"os/signal"
 	"time"
@@ -29,7 +28,6 @@ type HelloMsg struct {
 func main() {
 	// Our id can be anything. Here we pass it on the command line, using
 	//  `go run main.go -id=our_id`
-
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func(){
@@ -38,7 +36,6 @@ func main() {
         os.Exit(1)
 	}()
 
-	fmt.Println(runtime.Version())
 	var ids string
 	flag.StringVar(&ids, "id", "", "id of this peer")
 	flag.Parse()
@@ -47,8 +44,10 @@ func main() {
 	id := uint8(idn)
 	fmt.Printf("%d\n",id)
 
+	print.Init()
+	print.Line(runtime.Version())
 	if !elev.Init(id){
-		fmt.Println("Couldn't start io")
+		print.Line("Couldn't start io")
 		return
 	}
 	client.Init(id)
@@ -56,7 +55,7 @@ func main() {
 	com.Start(id, client.ClientInit)
 
 	for{
-		sm.PrintMap()
+		print.Display()
 		time.Sleep(400*time.Millisecond)
 	}
 	
