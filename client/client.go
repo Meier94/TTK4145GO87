@@ -119,7 +119,7 @@ func ClientListen(c *client){
 	go c.conn.Listen(c.msg_c, BUFLEN)
 	go Ping_out(TalkCounter, c)
 	TalkCounter+=2
-	print.StaticVars("ID: ", &c.id, "TalkCounter: ", &TalkCounter)
+	print.StaticVars("ID: ", &c.id, " TalkCounter: ", &TalkCounter)
 
 	for {
 		select {
