@@ -4,8 +4,20 @@ Go heisprosjekt
 https://blog.golang.org/c-go-cgo
 https://github.com/TTK4145/Project
 
+Tests run successfully:
+	1.
+	Bli stuck -> add masse ordre -> koble til første node -> den adopterer ordrene -> unstuck self -> self drar til target, men ordrene er fullført så den stopper.
 
+	2.
+	Koble til node -> bli stuck -> adde masse ordre -> dc node (den fullfører kall) -> ordre blir stashed hos self -> unstuck -> self adopterer ordre og utfører dem.
+
+	3.
+	bli stuck -> add masse ordre -> de blir stashed -> koble til node -> node får stashed ordre med en gang
+
+	future:
+	2, men man reconnecter før man unstucker self
 Thoughts:
+	Hva skjer om programmet avsluttes med ordre? (implementer skriv sm til fil (og stashed orders -.-))
 	Hva hvis du får et kall fra en etasje og du allerede vet at ordren oppfylles
 		Utifra spec så virker det som at ingenting skal skje? Usikker på denne, 1.8 i spec
 
