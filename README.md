@@ -6,9 +6,10 @@ https://github.com/TTK4145/Project
 
 
 Thoughts:
-	Solved: Hva skjer dersom du er stuck med ordre og du kobler deg til din første node
-
 	Hva hvis du får et kall fra en etasje og du allerede vet at ordren oppfylles
+		Utifra spec så virker det som at ingenting skal skje? Usikker på denne, 1.8 i spec
+
+	Solved: Hva skjer dersom du er stuck med ordre og du kobler deg til din første node
 
 	Solved: Flytt C. funksjonene til io.go
 
