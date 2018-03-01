@@ -38,7 +38,8 @@ var	cDir uint8 = UP
 
 
 var orders[m][3] bool
-var timer *time.Timer
+var openTimer *time.Timer
+var stuckTimer *timer.Timer
 var evt_c chan sm.ButtonPress
 
 
@@ -49,8 +50,8 @@ func Init(id uint8) bool {
 	}
 	io.ClearAllLights()
 
-	timer = time.NewTimer(0 * time.Millisecond)
-	<- timer.C
+	openTimer = time.NewTimer(0 * time.Millisecond)
+	<- openTimer.C
 
 	evt_c = make(chan sm.ButtonPress, m*3)
 	sm.Init(id, evt_c)
@@ -83,7 +84,7 @@ func triggerEvents(){
 			case Press := <- evt_c:
 				clearedOrders := evtExternalInput(Press.Floor, Press.Type)
 				go sm.StatusUpdate(cFloor, cTarget, false, clearedOrders)
-			case <- timer.C:
+			case <- openTimer.C:
 				evtTimeout()
 			default:
 				data = false
@@ -173,15 +174,15 @@ func openDoor(){
 	io.SetMotor(STOP)
 	io.SetDoorLight(1)
 
-	//Try to stop timer
-	if !timer.Stop() {
+	//Try to stop openTimer
+	if !openTimer.Stop() {
 		select {
-		case <-timer.C: //it just completed (evtTimeout() will not run)
+		case <-openTimer.C: //it just completed (evtTimeout() will not run)
 		default:		//it was not running
 		}
 	}
 
-	timer.Reset(time.Second*3)
+	openTimer.Reset(time.Second*3)
 }
 
 //Returns first in current direction
