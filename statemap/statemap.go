@@ -297,14 +297,23 @@ func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 
 //internal
 func redistributeOrders(index int16, removed bool) {
+	stuck := !removed
 	//Stuck or removed, redistribute orders
 	for f := int16(0); f < m; f++ {
 		if sm.orders[f][UP] == index{
+			//Supervisor will handle call. If unsupervised, delegate
+			if stuck && index == ME && sm.orders[f][UP] != NONE {
+				continue
+			}
 			sm.orders[f][UP] = NONE
 			sm.supervisors[f][UP] = NONE
 			delegateButtonPress(f, UP)
 		}
 		if sm.orders[f][DOWN] == index{
+			//Supervisor will handle call. If unsupervised, delegate
+			if stuck && index == ME && sm.orders[f][UP] != NONE {
+				continue
+			}
 			sm.orders[f][DOWN] = NONE
 			sm.supervisors[f][DOWN] = NONE
 			delegateButtonPress(f, DOWN)
