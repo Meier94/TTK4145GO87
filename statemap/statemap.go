@@ -190,7 +190,7 @@ func StatusUpdate(floor int16, target int16, stuck bool, cleared [3]bool){
 	sm.nodes[ME].target = target
 	if stuck && !sm.nodes[ME].stuck{
 		sm.nodes[ME].stuck = stuck
-		redistributeOrders(ME, stuck)
+		redistributeOrders(ME, !stuck)
 	} else if stashed && !stuck {
 		sm.nodes[ME].stuck = stuck
 		releaseStashedOrders()
