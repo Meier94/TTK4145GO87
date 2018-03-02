@@ -1,9 +1,8 @@
 package client
 
 import (
-	"bytes"
-	"encoding/binary"
 	"87/statemap"
+	"87/encode"
 	"87/network"
 	"87/print"
 	"sync"
@@ -46,7 +45,7 @@ var myID uint8
 
 func Init(id uint8){
 	talkTex = &sync.Mutex{}
-	BUFLEN = uint8(binary.Size(Msg_t{}))
+	BUFLEN = uint8(encode.Size(Msg_t{}))
 	myID = id
 	print.StaticVars("Active talks: ", &talks)
 }
@@ -301,19 +300,10 @@ func (c client) send(msg *Msg_t){
 
 func toMsg(data []byte) *Msg_t{
 	var msg Msg_t
-	buf := bytes.NewReader(data)
-	err := binary.Read(buf, binary.BigEndian, &msg)
-	if err != nil {
-		panic(err)
-	}
+	encode.FromBytes(data, &msg)
 	return &msg
 }
 
 func toBytes(data *Msg_t) []byte{
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, *data)
-	if testErr(err, "Couldn't convert message") {
-		panic(err)
-	}
-	return buf.Bytes()
+	return encode.ToBytes(*data)
 }

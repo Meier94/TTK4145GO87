@@ -85,8 +85,10 @@ func Display(){
 	mut.Lock()
 	defer mut.Unlock()
 
-	fmt.Printf("\x1b[%dA\r",linesPrinted) 	//up n lines
-	fmt.Printf("\x1b[J\r")			//Clear untill end of screen
+	if linesPrinted > 0 {
+		fmt.Printf("\x1b[%dA\r",linesPrinted) 	//up n lines
+		fmt.Printf("\x1b[J\r")					//Clear untill end of screen
+	}
 	linesPrinted = 0
 
 	for _,s := range strings {
