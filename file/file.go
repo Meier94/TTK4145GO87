@@ -1,13 +1,8 @@
-package main
+package file
 
 import (
-    "87/print"
-//    "bufio"
-//    "fmt"
-//    "io/ioutil"
     "os"
     "sync"
-    "time"
 )
 
 var mutex *sync.Mutex

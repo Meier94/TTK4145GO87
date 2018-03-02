@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"87/print"
+	"87/file"
+	"87/encode"
 //	"bytes"
 //	"encoding/binary"
 )
@@ -83,9 +85,25 @@ func Init(id uint8, elev_c chan<- ButtonPress){
 		sm.orders[i / 3][i % 3] = NONE
 		sm.supervisors[i / 3][i % 3] = NONE
 	}
+	file.Init()
 
+	size := encode.Size(sm.orders)
+	data, found := file.FindDataOfSize(size)
+	if found {
+		print.Line("Found data")
+		encode.FromBytes(data, &sm.orders)
+		for i := 0; i < int(m) * 3; i++{
+			handler := sm.orders[i / 3][i % 3]
 
-	//AddOrdersFromFile(&sm)
+			if handler != NONE {
+				delegateButtonPress(int16(i / 3), uint8(i % 3))
+			}
+		}
+
+	} else {
+		print.Line("Not found")
+	}
+
 	sm.mutex.Unlock()
 	print.AddStatic(PrintMap)
 }
@@ -332,6 +350,7 @@ func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	if index == ME {
 		elevCh <- ButtonPress{floor, buttonType}
 	}
+	file.WriteFile(encode.ToBytes(sm.orders))
 }
 
 //internal
@@ -348,6 +367,7 @@ func removeOrders(floor int16, clear [3]bool){
 		sm.orders[floor][CAB] = NONE
 		sm.supervisors[floor][CAB] = NONE
 	}
+	file.WriteFile(encode.ToBytes(sm.orders))
 }
 
 //internal
