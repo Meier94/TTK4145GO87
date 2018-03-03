@@ -22,10 +22,11 @@ func Start(id uint8, callback func(Connection, bool)){
 	connections_m = make(map[string]int)
 	myID = id
 
-	go UdpListen()
-	go TcpAccept()
-	go UdpBroadcast()
+	go udpListenForNodes()
+	go tcpAcceptConnections()
+	go udpBroadcastExistence()
 }
+
 
 func testErr(err error, msg string) bool {
 	if err != nil {
@@ -35,9 +36,9 @@ func testErr(err error, msg string) bool {
 	return false
 }
 
+//No error test here because it is expected to fail repeatedly when disconnected
 func (c Connection) Send(msg []byte){
-	_, err := c.conn.Write(msg)
-	testErr(err, "Send")
+	c.conn.Write(msg)
 }
 
 
@@ -52,16 +53,18 @@ func addToMap(ip string) bool {
 	return true
 }
 
-func (c Connection) Close(){
-	ip,_,_ := net.SplitHostPort(c.conn.RemoteAddr().String())
-	removeFromMap(ip)
-	c.conn.Close()
-}
 
 func removeFromMap(ip string){
 	mapTex.Lock()
 	delete(connections_m, ip)
 	mapTex.Unlock()
+}
+
+
+func (c Connection) Close(){
+	ip,_,_ := net.SplitHostPort(c.conn.RemoteAddr().String())
+	removeFromMap(ip)
+	c.conn.Close()
 }
 
 
@@ -83,7 +86,8 @@ func (c Connection) Listen(msg_c chan<- []byte, bufLen uint8){
 	}
 }
 
-func (c Connection) TcpRead(bufLen uint8) []byte{
+
+func (c Connection) Read(bufLen uint8) []byte{
 	buf := make([]byte, bufLen)
 	c.conn.SetReadDeadline(time.Now().Add(1000 * time.Millisecond))
 	n, err := c.conn.Read(buf)
@@ -100,24 +104,24 @@ func (c Connection) TcpRead(bufLen uint8) []byte{
 }
 
 
-func UdpListen(){
+func udpListenForNodes(){
 	for {
 		Addr,err := net.ResolveUDPAddr("udp",":55087")
 	    if testErr(err, "Couldn't resolve UDP listen") {
 	    	continue
 	    }
 
-		SerConn, err := net.ListenUDP("udp", Addr)
+		ListenConn, err := net.ListenUDP("udp", Addr)
 	    if testErr(err, "Couldn't listen to udp") {
 	    	continue
 	    }
 
 	    buf := make([]byte, 1024)
-	    defer SerConn.Close()
+	    defer ListenConn.Close()
 		for {
-			// connect to this socket
-			_,addr,err := SerConn.ReadFromUDP(buf)
+			_,addr,err := ListenConn.ReadFromUDP(buf)
 	        
+	        //Only connect if id of sender is higher
 	        if testErr(err, "UDP read failed") || buf[0] >= myID {
 	            continue
 	        }
@@ -128,6 +132,7 @@ func UdpListen(){
 	        }
 
 			var conn net.Conn
+			//Try to dial 3 times
 			for i := 0; i < 3; i++ {
 				conn, err = net.Dial("tcp", ip + ":4487")
 
@@ -148,22 +153,23 @@ func UdpListen(){
 	}
 }
 
-func UdpBroadcast(){
+
+func udpBroadcastExistence(){
 	for {
-		ServerAddr,err := net.ResolveUDPAddr("udp","255.255.255.255:55087")
+		Addr,err := net.ResolveUDPAddr("udp","255.255.255.255:55087")
 	    if testErr(err, "Couldn't resolve UDPAddr broadcast") {
 	        continue
 	    }
 
-	    Conn, err := net.DialUDP("udp", nil, ServerAddr)
+	    conn, err := net.DialUDP("udp", nil, Addr)
 	    if testErr(err, "Couldn't establish UDP connection") {
 	        continue
 	    }
 	 
-	    defer Conn.Close()
+	    defer conn.Close()
+	    buf := []byte{myID}
 	    for {
-	        buf := []byte{myID}
-	        _,err := Conn.Write(buf)
+	        _,err := conn.Write(buf)
 	        testErr(err, "UDP write failed")
 
 	        time.Sleep(time.Second * 1)
@@ -171,7 +177,8 @@ func UdpBroadcast(){
 	}
 }
 
-func TcpAccept(){
+
+func tcpAcceptConnections(){
 	for {
 		ln, err := net.Listen("tcp", ":4487")
 		if testErr(err, "TCP Listen failed") {

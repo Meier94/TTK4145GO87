@@ -1,5 +1,9 @@
 package encode
-//Structs must be constant size and any member must be exported (Capital first letter)
+//Structs must be explicit size and any member must be public
+//int not allowed (use int8, int16 so on)
+//Arrays allowed, but not slices
+//Pointers should not be used
+//Nested structs allowed but these must also conform with the rules above
 
 import (
 	"encoding/binary"
@@ -10,7 +14,8 @@ func Size(i interface{}) int{
 	return binary.Size(i)
 }
 
-func  FromBytes(data []byte,i interface{}){
+//i should be a pointer
+func FromBytes(data []byte, i interface{}){
 	buf := bytes.NewReader(data)
 	err := binary.Read(buf, binary.BigEndian, i)
 	if err != nil {

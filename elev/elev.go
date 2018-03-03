@@ -43,7 +43,6 @@ var stuckTimer *time.Timer
 var evt_c chan sm.ButtonPress
 
 
-
 func Init(id uint8) bool {
 	if !io.Init(){
 		return false
@@ -63,7 +62,7 @@ func Init(id uint8) bool {
 	return true
 }
 
-
+//Any event originates from this function (only one evt function called at a time)
 func triggerEvents(){
 	for {
 		if io.GetInputs() {
@@ -78,7 +77,7 @@ func triggerEvents(){
 					go sm.StatusUpdate(cFloor, cTarget, false, clearedOrders)
 					continue
 				}
-				go sm.AddButtonPress(floor, evtType)
+				go sm.NewButtonPress(floor, evtType)
 			}
 		}
 		for data := true; data;{
@@ -146,14 +145,12 @@ func evtTimeout(){
 	state = idle_s
 }
 
+
 func evtStuck(){
 	switch state {
 	case executing_s:
-		print.Line("Stuck state", state)
 		state = stuck_s
 		dropOrders()
-	default:
-		print.Line("Stuck in state ", state)
 	}
 }
 
@@ -188,7 +185,6 @@ func evtFloorReached(nFloor int16) [3]bool  {
 	cTarget = nTarget
 	return clearedOrders
 }
-
 
 
 func openDoor(){

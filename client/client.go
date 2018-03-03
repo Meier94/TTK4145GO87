@@ -22,10 +22,10 @@ type client struct{
 	id uint8
 	smIndex int16
 	conn com.Connection
-	dc_c chan bool
-	talkDone_c chan uint32
-	msg_c chan []byte
-	evt_c chan *sm.Evt
+	dcCh chan bool
+	talkDoneCh chan uint32
+	msgCh chan []byte
+	evtCh chan *sm.Evt
 	talks_m map[uint32]chan *Msg_t
 }
 
@@ -58,13 +58,13 @@ func testErr(err error, msg string) bool {
 	return false
 }
 
-func ClientInit(conn com.Connection, flag bool){
+func NewClient(conn com.Connection, flag bool){
 	msg := Msg_t{ClientID: myID, Type: INTRO}
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
 	client{conn: conn}.send(&msg)
 
-	in := conn.TcpRead(BUFLEN)
+	in := conn.Read(BUFLEN)
 	if in == nil {
 		conn.Close()
 		return
@@ -79,15 +79,15 @@ func ClientInit(conn com.Connection, flag bool){
 	var cli client
 	cli.id 			= intro.ClientID
 	cli.conn 		= conn
-	cli.talkDone_c  = make(chan uint32)
-	cli.dc_c 		= make(chan bool)
-	cli.evt_c 		= make(chan *sm.Evt, 10)
-	cli.msg_c 		= make(chan []byte, 10)
+	cli.talkDoneCh  = make(chan uint32)
+	cli.dcCh 		= make(chan bool)
+	cli.evtCh 		= make(chan *sm.Evt, 10)
+	cli.msgCh 		= make(chan []byte, 10)
 	cli.talks_m 	= make(map[uint32]chan *Msg_t)
-	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evt_c)
+	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evtCh)
 
 	print.Format("Added node with id: %d\n", cli.id)
-	go ClientListen(&cli)
+	go routeClient(&cli)
 }
 
 func closeClient(c *client){
@@ -95,36 +95,37 @@ func closeClient(c *client){
 
 	sm.RemoveNode(c.smIndex)
 	talkTex.Lock()
-	close(c.talkDone_c)
-	c.talkDone_c = nil
-	close(c.dc_c)
+	close(c.talkDoneCh)
+	c.talkDoneCh = nil
+	close(c.dcCh)
 
 
 	for _, ch := range c.talks_m {
 		close(ch)
 	}
 	talkTex.Unlock()
-	//issue that it returns before talks are finished cleaning up?
-	//remove itself from map
+
+	//Remove from communication module
 	c.conn.Close()
 }
 
-func ClientListen(c *client){
+func routeClient(c *client){
+	//Unique id for each talk. Talks initiated by dialer are odd numbered and vice versa
 	var TalkCounter uint32 = 0
 	if myID < c.id {
 		TalkCounter++
 	}
 
-	go c.conn.Listen(c.msg_c, BUFLEN)
-	go Ping_out(TalkCounter, c)
+	go c.conn.Listen(c.msgCh, BUFLEN)
+	go pingClient(TalkCounter, c)
 	TalkCounter+=2
-	p := print.StaticVars("ID: ", &c.id, " TalkCounter: ", &TalkCounter)
-	defer print.RemoveStatic(p)
+
+	defer print.StaticVars("ID: ", &c.id, " TalkCounter: ", &TalkCounter).Remove()
 
 	for {
 		select {
 			//TcpListen has received a message from client
-			case data, ok := <- c.msg_c: {
+			case data, ok := <- c.msgCh: {
 				if !ok {
 					//Client is non responsive
 					closeClient(c)
@@ -137,7 +138,7 @@ func ClientListen(c *client){
 				}
 			}
 
-			case evt := <- c.evt_c :
+			case evt := <- c.evtCh :
 				newMsg := &Msg_t{Type: EVT, Evt: *evt}
 				newTalk(newMsg, c, &TalkCounter, true)
 		}
@@ -145,7 +146,7 @@ func ClientListen(c *client){
 }
 
 func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool){
-	new_c := make(chan *Msg_t)
+	newCh := make(chan *Msg_t)
 	talkTex.Lock()
 
 	talks++
@@ -154,30 +155,36 @@ func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool){
 		*counter += 2
 	}
 
-	c.talks_m[msg.TalkID] = new_c
+	c.talks_m[msg.TalkID] = newCh
 	talkTex.Unlock()
 
-	go runProtocol(msg, new_c, c, outgoing)
+	if outgoing {
+		go sendEvt(msg, newCh, c)
+
+	} else {
+		if msg.Type != PING {
+			go recvEvt(msg, newCh, c)
+		}
+	}
 }
 
+
 func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
+	//Ignore ping messages (TalkID <= 1)
 	if msg.TalkID > 1 {
 		talkTex.Lock()
 		recvChan := talks_m[msg.TalkID]
 		talkTex.Unlock()
+
 		if recvChan == nil {
 			return false
 		}
-		//Try to forward for at least 100 us.
+		//Try to forward for *at least* 100us
 		go func(){
 			select {
 			case recvChan <- msg:
 			case <- time.After(100 * time.Microsecond):
 				print.Format("Couldn't forward message: %d\n", msg.TalkID)
-				//This should only happen if an ack message is assumed received
-				//but two tcp messages got lost, and the third message is actually
-				//received as the getAck times out. Precautinary
-				//Helps with fault tolerance in any case
 			}
 		}()
 	}
@@ -189,34 +196,15 @@ func endTalk(c *client, id uint32){
 	talkTex.Lock()
 	delete(c.talks_m, id)
 	talks--
-	if talks == 0{
-		//fmt.Println("No talks active")
-	}
 	talkTex.Unlock()
 }
 
-func runProtocol(msg *Msg_t, talk_c <-chan *Msg_t, c *client, outgoing bool){
-	if outgoing {
-		switch msg.Type{
-		default:
-			sendEvt(msg, talk_c, c)
-		}
 
-	} else {
-		switch msg.Type{
-		case PING:
-			//nothing
-		default:
-			recvEvt(msg, talk_c, c)
-		}
-	}
-}
-
-func Ping_out(talkID uint32, c *client){
+func pingClient(talkID uint32, c *client){
 	msg := Msg_t{TalkID: talkID, Type: PING}
 	for{
 		select {
-		case <- c.dc_c :
+		case <- c.dcCh :
 			//client dc
 			return
 		case <- time.After(40 * time.Millisecond) :
@@ -226,9 +214,9 @@ func Ping_out(talkID uint32, c *client){
 }
 
 
-func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
+func sendEvt(msg *Msg_t, talkCh <-chan *Msg_t, c *client){
 	c.send(msg)
-	if getACK(msg, talk_c, c) {
+	if getACK(msg, talkCh, c) {
 		go sm.EvtAccepted(&msg.Evt, c.smIndex)
 	} else {
 		go sm.EvtDismissed(&msg.Evt, c.smIndex)
@@ -236,18 +224,19 @@ func sendEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
 	endTalk(c,msg.TalkID)
 }
 
-func recvEvt(msg *Msg_t, talk_c <-chan *Msg_t, c *client){
+
+func recvEvt(msg *Msg_t, talkCh <-chan *Msg_t, c *client){
 	go sm.EvtRegister(&msg.Evt, c.smIndex)
-	sendACK(msg, talk_c, c)
+	sendACK(msg, talkCh, c)
 	endTalk(c,msg.TalkID)
 }
 
 
-func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
+func getACK(msg *Msg_t, talkCh <-chan *Msg_t, c *client) bool {
 	attempts := 0
 	for {
 		select {
-		case rcvMsg, ok := <- talk_c:
+		case rcvMsg, ok := <- talkCh:
 			if !ok {
 				//Client closed
 				return false
@@ -271,14 +260,14 @@ func getACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	}
 }
 
-func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
+func sendACK(msg *Msg_t, talkCh <-chan *Msg_t, c *client) bool {
 	msg.Type = ACK
 	c.send(msg)
 
 	//Listen for further messages (in case the ack got lost)
 	for {
 		select {
-		case rcvMsg, ok := <- talk_c:
+		case rcvMsg, ok := <- talkCh:
 			if !ok {
 				//Client closed
 				return false
@@ -293,16 +282,19 @@ func sendACK(msg *Msg_t, talk_c <-chan *Msg_t, c *client) bool {
 	}
 }
 
+
 func (c client) send(msg *Msg_t){
 	buf := toBytes(msg)
 	c.conn.Send(buf)
 }
+
 
 func toMsg(data []byte) *Msg_t{
 	var msg Msg_t
 	encode.FromBytes(data, &msg)
 	return &msg
 }
+
 
 func toBytes(data *Msg_t) []byte{
 	return encode.ToBytes(*data)

@@ -7,8 +7,6 @@ import (
 	"87/print"
 	"87/file"
 	"87/encode"
-//	"bytes"
-//	"encoding/binary"
 )
 
 const m int16 = 4
@@ -50,11 +48,6 @@ type Evt struct{
 	Cleared [3]bool
 }
 
-type orderParticipants struct{
-	id int16
-	buddy int16
-}
-
 type stateMap struct{
 	mutex 		*sync.Mutex
 	orders 		[m][3]int16
@@ -67,7 +60,6 @@ var sm = stateMap{}
 var elevCh chan<- ButtonPress
 var stashed bool = false
 var stashedOrders [m][2]bool
-
 
 
 func Init(id uint8, elev_c chan<- ButtonPress){
@@ -96,6 +88,7 @@ func Init(id uint8, elev_c chan<- ButtonPress){
 			handler := sm.orders[i / 3][i % 3]
 
 			if handler != NONE {
+				sm.orders[i / 3][i % 3] = NONE
 				delegateButtonPress(int16(i / 3), uint8(i % 3))
 			}
 		}
@@ -124,7 +117,6 @@ func EvtAccepted(evt *Evt, index int16){
 }
 
 //External
-//Only happens if node is dc
 func EvtDismissed(evt *Evt, index int16){
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
@@ -225,17 +217,18 @@ func StatusUpdate(floor int16, target int16, stuck bool, cleared [3]bool){
 }
 
 //External
-func AddButtonPress(floor int16, buttonType uint8){
+func NewButtonPress(floor int16, buttonType uint8){
 	sm.mutex.Lock()
-	if sm.orders[floor][buttonType] == NONE {
-		delegateButtonPress(floor, buttonType)
-	}
+	delegateButtonPress(floor, buttonType)
 	sm.mutex.Unlock()
 }
 
 //internal
 //burde kanskje returnere channel bare så fikser elev evt biffen?
 func delegateButtonPress(floor int16, buttonType uint8) {
+	if sm.orders[floor][buttonType] != NONE {
+		return
+	}
 	if buttonType == CAB || sm.numNodes == 1{
 		if sm.nodes[0].stuck && buttonType != CAB{
 			stashOrder(floor, buttonType)

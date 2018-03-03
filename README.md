@@ -17,7 +17,12 @@ Tests run successfully:
 	future:
 	2, men man reconnecter før man unstucker self
 Thoughts:
+	Hva hvis to heiser er stuck, da vil ikke ordrene stashes as of now. Burde prob legge til enda en clause for stashOrder()
+
+	Burde kanskje gjøre file modulen litt mer robust (den kaller panic alt for ofte)
+
 	Hva skjer om programmet avsluttes med ordre? (implementer skriv sm til fil (og stashed orders -.-))
+	
 	Hva hvis du får et kall fra en etasje og du allerede vet at ordren oppfylles
 		Utifra spec så virker det som at ingenting skal skje? Usikker på denne, 1.8 i spec
 

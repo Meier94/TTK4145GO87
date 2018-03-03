@@ -14,6 +14,9 @@ const numStrings = 80
 //Allowed static print functions active at a time
 const numStatic = 10
 
+type staticPrint struct{
+	e *list.Element
+}
 
 var mut *sync.Mutex
 
@@ -47,7 +50,7 @@ func Line(args ...interface{}){
 }
 
 //Only one line allowed
-func StaticVars(args ...interface{}) *list.Element {
+func StaticVars(args ...interface{}) staticPrint {
 	mut.Lock()
 	f := func() int {
 		for _, v := range args {
@@ -66,16 +69,16 @@ func StaticVars(args ...interface{}) *list.Element {
 }
 
 //Should preferably have fixed print height
-func AddStatic(f func() int) *list.Element {
+func AddStatic(f func() int) staticPrint {
 	mut.Lock()
 	defer mut.Unlock()
-	return static.PushFront(f)
+	return staticPrint{static.PushFront(f)}
 }
 
-func RemoveStatic(entry *list.Element){
+func (print staticPrint) Remove(){
 	mut.Lock()
-	defer mut.Unlock()
-	static.Remove(entry)
+	static.Remove(print.e)
+	mut.Unlock()
 }
 
 
