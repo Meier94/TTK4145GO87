@@ -282,6 +282,37 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 
 
 //internal
+func redistributeOrders(index int16, removed bool) {
+	stuck := !removed
+	//Stuck or removed, redistribute orders
+	for f := int16(0); f < m; f++ {
+		if sm.orders[f][UP] == index{
+			sm.orders[f][UP] = NONE
+			supervised := sm.supervisors[f][UP] != NONE
+			sm.supervisors[f][UP] = NONE
+			if stuck && index == ME && supervised {
+				//Supervisor will handle call. If unsupervised, delegate
+			} else {
+				delegateButtonPress(f, UP)
+			}
+		}
+		if sm.orders[f][DOWN] == index{
+			sm.orders[f][DOWN] = NONE
+			supervised := sm.supervisors[f][DOWN] != NONE
+			sm.supervisors[f][DOWN] = NONE
+			if stuck && index == ME && supervised {
+				//Supervisor will handle call. If unsupervised, delegate
+			} else {
+				delegateButtonPress(f, DOWN)
+			}
+		}
+	}
+	//if removed
+	//TODO: maybe add new supervisor (Not really necessary according to spec)
+}
+
+
+//internal
 func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 	node := &(sm.nodes[index]);
 	var cost int16
@@ -324,39 +355,6 @@ func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 }
 
 
-
-//internal
-func redistributeOrders(index int16, removed bool) {
-	stuck := !removed
-	//Stuck or removed, redistribute orders
-	for f := int16(0); f < m; f++ {
-		if sm.orders[f][UP] == index{
-			sm.orders[f][UP] = NONE
-			supervised := sm.supervisors[f][UP] != NONE
-			sm.supervisors[f][UP] = NONE
-			io.SetButtonLight(f, UP, 0)
-			if stuck && index == ME && supervised {
-				//Supervisor will handle call. If unsupervised, delegate
-			} else {
-				delegateButtonPress(f, UP)
-			}
-		}
-		if sm.orders[f][DOWN] == index{
-			sm.orders[f][DOWN] = NONE
-			supervised := sm.supervisors[f][DOWN] != NONE
-			sm.supervisors[f][DOWN] = NONE
-			io.SetButtonLight(f, DOWN, 0)
-			if stuck && index == ME && supervised {
-				//Supervisor will handle call. If unsupervised, delegate
-			} else {
-				delegateButtonPress(f, DOWN)
-			}
-		}
-	}
-	//if removed
-	//TODO: maybe add new supervisor (Not really necessary according to spec)
-}
-
 //internal
 func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	sm.orders[floor][buttonType] = index
@@ -365,7 +363,24 @@ func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	if index == ME {
 		elevCh <- ButtonPress{floor, buttonType}
 	}
-	file.WriteFile(encode.ToBytes(sm.orders))
+	storeStateMap()
+}
+
+func storeStateMap(){
+	tempMap := sm.orders
+
+	if stashed {
+		for f := int16(0); f < m; f++ {
+			if stashedOrders[f][UP]{
+				tempMap[f][UP] = ME
+			}
+			if stashedOrders[f][DOWN]{
+				tempMap[f][DOWN] = ME
+			}
+		}
+	}
+
+	file.WriteFile(encode.ToBytes(tempMap))
 }
 
 //internal
@@ -385,7 +400,7 @@ func removeOrders(floor int16, clear [3]bool){
 		sm.supervisors[floor][CAB] = NONE
 		io.SetButtonLight(floor, CAB, 0)
 	}
-	file.WriteFile(encode.ToBytes(sm.orders))
+	storeStateMap()
 }
 
 //internal
