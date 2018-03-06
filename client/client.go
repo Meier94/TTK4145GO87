@@ -20,7 +20,7 @@ type Msg_t struct{
 
 type client struct{
 	id uint8
-	smIndex int16
+	smIndex *int16
 	conn com.Connection
 	dcCh chan bool
 	talkDoneCh chan uint32

@@ -28,6 +28,7 @@ const STATE uint8 = 203
 
 type nodeInfo struct{
 	id uint8
+	index *int16
 	floor int16
 	target int16
 	stuck bool
@@ -104,9 +105,10 @@ func Init(id uint8, elev_c chan<- ButtonPress){
 
 
 //External
-func EvtAccepted(evt *Evt, index int16){
+func EvtAccepted(evt *Evt, indexPtr *int16){
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
+	index := *indexPtr
 	switch evt.Type {
 	case CALL :
 		if evt.Supervise {
@@ -118,7 +120,7 @@ func EvtAccepted(evt *Evt, index int16){
 }
 
 //External
-func EvtDismissed(evt *Evt, index int16){
+func EvtDismissed(evt *Evt, indexPtr *int16){
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 	switch evt.Type {
@@ -128,9 +130,10 @@ func EvtDismissed(evt *Evt, index int16){
 }
 
 //External
-func EvtRegister(evt *Evt, index int16){
+func EvtRegister(evt *Evt, indexPtr *int16){
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
+	index := *indexPtr
 	switch evt.Type {
 	case CALL :
 		if evt.Supervise {
@@ -160,10 +163,11 @@ func EvtRegister(evt *Evt, index int16){
 }
 
 //external function
-func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) int16{
+func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) *int16{
 	sm.mutex.Lock()
 	index := int16(sm.numNodes)
 	sm.nodes[index].id = id
+	sm.nodes[index].index = &index
 	sm.nodes[index].floor = floor
 	sm.nodes[index].target = target
 	sm.nodes[index].stuck = stuck
@@ -173,14 +177,16 @@ func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) in
 		releaseStashedOrders()
 	}
 	sm.mutex.Unlock()
-	return index
+	return sm.nodes[index].index
 }
 
 //external function
-func RemoveNode(index int16){
+func RemoveNode(indexPtr *int16){
 	sm.mutex.Lock()
+	index := *indexPtr
 	for i := index; i < int16(sm.numNodes); i++{
 		sm.nodes[i] = sm.nodes[i + 1]
+		*sm.nodes[i].index--
 	}
 	sm.numNodes--
 	redistributeOrders(index, true)
