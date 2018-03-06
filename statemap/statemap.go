@@ -257,6 +257,7 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 
 	if index == -1 {
 		stashOrder(floor, buttonType)
+		return
 	}
 
 	evt := Evt{Type: CALL, Floor: floor, Button: buttonType}
