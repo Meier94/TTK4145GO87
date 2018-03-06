@@ -108,6 +108,8 @@ func evtExternalInput(floor int16, buttonType uint8) [3]bool {
 	clearedOrders := [3]bool{}
 
 	switch state {
+	case init_s:
+		return clearedOrders
 	case open_s:
 		if nTarget == NONE {
 			openDoor()
