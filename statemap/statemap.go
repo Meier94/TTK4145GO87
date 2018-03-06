@@ -406,9 +406,18 @@ func PrintMap() int{
 	num := int(sm.numNodes)
 	fmt.Printf("  F - | U , D , C | \n");
 	for f := m-1; f >= 0; f--{
-		fmt.Printf("%3d - |%3d,%3d,%3d|\n",f, sm.orders[f][UP],
+		fmt.Printf("%3d - |%3d,%3d,%3d|",f, sm.orders[f][UP],
 								      		  sm.orders[f][DOWN],
-								      		  sm.orders[f][CAB]);
+								      		  sm.orders[f][CAB])
+		u := 0
+		d := 0
+		if stashedOrders[f][UP] {
+			u = 1
+		}
+		if stashedOrders[f][DOWN] {
+			d = 1
+		}
+		fmt.Printf(" - |%3d,%3d|\n",u,d)
 	}
 	fmt.Printf("Connected nodes")
 
