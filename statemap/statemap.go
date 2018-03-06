@@ -144,6 +144,7 @@ func EvtRegister(evt *Evt, index int16){
 		sm.nodes[index].floor = evt.Floor
 		sm.nodes[index].target = evt.Target
 		if sm.nodes[index].stuck && !evt.Stuck && stashed {
+			sm.nodes[index].stuck = evt.Stuck
 			releaseStashedOrders()
 		}
 		sm.nodes[index].stuck = evt.Stuck
@@ -323,24 +324,26 @@ func redistributeOrders(index int16, removed bool) {
 	//Stuck or removed, redistribute orders
 	for f := int16(0); f < m; f++ {
 		if sm.orders[f][UP] == index{
-			//Supervisor will handle call. If unsupervised, delegate
-			if stuck && index == ME && sm.supervisors[f][UP] != NONE {
-				continue
-			}
 			sm.orders[f][UP] = NONE
+			supervised := sm.supervisors[f][UP] != NONE
 			sm.supervisors[f][UP] = NONE
 			io.SetButtonLight(f, UP, 0)
-			delegateButtonPress(f, UP)
+			if stuck && index == ME && supervised {
+				//Supervisor will handle call. If unsupervised, delegate
+			} else {
+				delegateButtonPress(f, UP)
+			}
 		}
 		if sm.orders[f][DOWN] == index{
-			//Supervisor will handle call. If unsupervised, delegate
-			if stuck && index == ME && sm.supervisors[f][DOWN] != NONE {
-				continue
-			}
 			sm.orders[f][DOWN] = NONE
+			supervised := sm.supervisors[f][DOWN] != NONE
 			sm.supervisors[f][DOWN] = NONE
 			io.SetButtonLight(f, DOWN, 0)
-			delegateButtonPress(f, DOWN)
+			if stuck && index == ME && supervised {
+				//Supervisor will handle call. If unsupervised, delegate
+			} else {
+				delegateButtonPress(f, DOWN)
+			}
 		}
 	}
 	//if removed
