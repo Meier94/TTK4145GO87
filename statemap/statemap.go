@@ -184,11 +184,12 @@ func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) *i
 func RemoveNode(indexPtr *int16){
 	sm.mutex.Lock()
 	index := *indexPtr
+	print.Line("Index ", index)
+	sm.numNodes--
 	for i := index; i < int16(sm.numNodes); i++{
 		sm.nodes[i] = sm.nodes[i + 1]
 		*sm.nodes[i].index--
 	}
-	sm.numNodes--
 	redistributeOrders(index, true)
 	sm.mutex.Unlock()
 }
