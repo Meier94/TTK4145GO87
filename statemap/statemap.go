@@ -7,6 +7,7 @@ import (
 	"87/print"
 	"87/file"
 	"87/encode"
+	"87/elev/io"
 )
 
 const m int16 = 4
@@ -320,6 +321,7 @@ func redistributeOrders(index int16, removed bool) {
 			}
 			sm.orders[f][UP] = NONE
 			sm.supervisors[f][UP] = NONE
+			io.SetButtonLight(f, UP, 0)
 			delegateButtonPress(f, UP)
 		}
 		if sm.orders[f][DOWN] == index{
@@ -329,6 +331,7 @@ func redistributeOrders(index int16, removed bool) {
 			}
 			sm.orders[f][DOWN] = NONE
 			sm.supervisors[f][DOWN] = NONE
+			io.SetButtonLight(f, DOWN, 0)
 			delegateButtonPress(f, DOWN)
 		}
 	}
@@ -340,6 +343,7 @@ func redistributeOrders(index int16, removed bool) {
 func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	sm.orders[floor][buttonType] = index
 	sm.supervisors[floor][buttonType] = supervisor
+	io.SetButtonLight(floor, buttonType, 1)
 	if index == ME {
 		elevCh <- ButtonPress{floor, buttonType}
 	}
@@ -351,14 +355,17 @@ func removeOrders(floor int16, clear [3]bool){
 	if clear[UP] {
 		sm.orders[floor][UP] = NONE
 		sm.supervisors[floor][UP] = NONE
+		io.SetButtonLight(floor, UP, 0)
 	}
 	if clear[DOWN] {
 		sm.orders[floor][DOWN] = NONE
 		sm.supervisors[floor][DOWN] = NONE
+		io.SetButtonLight(floor, DOWN, 0)
 	}
 	if clear[CAB] {
 		sm.orders[floor][CAB] = NONE
 		sm.supervisors[floor][CAB] = NONE
+		io.SetButtonLight(floor, CAB, 0)
 	}
 	file.WriteFile(encode.ToBytes(sm.orders))
 }
@@ -397,22 +404,22 @@ func PrintMap() int{
 	}
 	fmt.Printf("Connected nodes")
 
-	fmt.Printf("\nid     | ")
+	fmt.Printf("\nid     |")
 	for n := 0; n < num; n++ {
 		fmt.Printf("%3d |", sm.nodes[n].id)
 	}
 
-	fmt.Printf("\nfloor  | ")
+	fmt.Printf("\nfloor  |")
 	for n := 0; n < num; n++ {
 		fmt.Printf("%3d |", sm.nodes[n].floor)
 	}
 
-	fmt.Printf("\ntarget | ")
+	fmt.Printf("\ntarget |")
 	for n := 0; n < num; n++ {
 		fmt.Printf("%3d |", sm.nodes[n].target)
 	}
 
-	fmt.Printf("\nstuck  | ")
+	fmt.Printf("\nstuck  |")
 	for n := 0; n < num; n++ {
 		t := 0
 		if sm.nodes[n].stuck{

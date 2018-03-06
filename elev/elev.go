@@ -109,7 +109,11 @@ func evtExternalInput(floor int16, buttonType uint8) [3]bool {
 
 	switch state {
 	case open_s:
-		fallthrough
+		if nTarget == NONE {
+			openDoor()
+			state = open_s
+			clearedOrders = orderComplete(cFloor, cDir, nDir)
+		}
 	case idle_s:
 		if nTarget == NONE {
 			openDoor()
@@ -156,6 +160,7 @@ func evtStuck(){
 
 
 func evtFloorReached(nFloor int16) [3]bool  {
+	io.SetFloorLight(nFloor)
 	resetTimer(stuckTimer, 3)
 	nTarget, nDir := newTarget(nFloor, cDir)
 	clearedOrders := [3]bool{}
