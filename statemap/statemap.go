@@ -143,7 +143,11 @@ func EvtRegister(evt *Evt, index int16){
 	case STATE :
 		sm.nodes[index].floor = evt.Floor
 		sm.nodes[index].target = evt.Target
+		if sm.nodes[index].stuck && !evt.Stuck && stashed {
+			releaseStashedOrders()
+		}
 		sm.nodes[index].stuck = evt.Stuck
+
 
 		evt.Cleared[CAB] = false
 		removeOrders(evt.Floor, evt.Cleared)
@@ -251,6 +255,9 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 		}
 	}
 
+	if index == -1 {
+		stashOrder(floor, buttonType)
+	}
 
 	evt := Evt{Type: CALL, Floor: floor, Button: buttonType}
 	if index == 0{
