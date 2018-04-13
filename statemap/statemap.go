@@ -1,13 +1,12 @@
 package sm
 
-
 import (
+	"87/elev/io"
+	"87/encode"
+	"87/file"
+	"87/print"
 	"fmt"
 	"sync"
-	"87/print"
-	"87/file"
-	"87/encode"
-	"87/elev/io"
 )
 
 const m int16 = 4
@@ -26,36 +25,36 @@ const CALL uint8 = 201
 const FAILED_CALL uint8 = 202
 const STATE uint8 = 203
 
-type nodeInfo struct{
-	id uint8
-	index *int16
-	floor int16
+type nodeInfo struct {
+	id     uint8
+	index  *int16
+	floor  int16
 	target int16
-	stuck bool
-	send chan *Evt
+	stuck  bool
+	send   chan *Evt
 }
 
 type ButtonPress struct {
 	Floor int16
-	Type uint8
+	Type  uint8
 }
 
-type Evt struct{
-	Type uint8
-	Floor int16
-	Target int16
-	Button uint8
-	Stuck bool
+type Evt struct {
+	Type      uint8
+	Floor     int16
+	Target    int16
+	Button    uint8
+	Stuck     bool
 	Supervise bool
-	Cleared [3]bool
+	Cleared   [3]bool
 }
 
-type stateMap struct{
-	mutex 		*sync.Mutex
-	orders 		[m][3]int16
+type stateMap struct {
+	mutex       *sync.Mutex
+	orders      [m][3]int16
 	supervisors [m][3]int16
-	nodes 		[n]nodeInfo
-	numNodes 	uint8
+	nodes       [n]nodeInfo
+	numNodes    uint8
 }
 
 var sm = stateMap{}
@@ -63,8 +62,7 @@ var elevCh chan<- ButtonPress
 var stashed bool = false
 var stashedOrders [m][2]bool
 
-
-func Init(id uint8, elev_c chan<- ButtonPress){
+func Init(id uint8, elev_c chan<- ButtonPress) {
 	elevCh = elev_c
 	sm.mutex = &sync.Mutex{}
 	sm.mutex.Lock()
@@ -75,9 +73,9 @@ func Init(id uint8, elev_c chan<- ButtonPress){
 	sm.nodes[ME].target = NONE
 	sm.nodes[ME].stuck = false
 
-	for i := 0; i < int(m) * 3; i++{
-		sm.orders[i / 3][i % 3] = NONE
-		sm.supervisors[i / 3][i % 3] = NONE
+	for i := 0; i < int(m)*3; i++ {
+		sm.orders[i/3][i%3] = NONE
+		sm.supervisors[i/3][i%3] = NONE
 	}
 	file.Init()
 
@@ -86,12 +84,12 @@ func Init(id uint8, elev_c chan<- ButtonPress){
 	if found {
 		print.Line("Found data")
 		encode.FromBytes(data, &sm.orders)
-		for i := 0; i < int(m) * 3; i++{
-			handler := sm.orders[i / 3][i % 3]
+		for i := 0; i < int(m)*3; i++ {
+			handler := sm.orders[i/3][i%3]
 
 			if handler != NONE {
-				sm.orders[i / 3][i % 3] = NONE
-				delegateButtonPress(int16(i / 3), uint8(i % 3))
+				sm.orders[i/3][i%3] = NONE
+				delegateButtonPress(int16(i/3), uint8(i%3))
 			}
 		}
 
@@ -103,14 +101,13 @@ func Init(id uint8, elev_c chan<- ButtonPress){
 	print.AddStatic(PrintMap)
 }
 
-
 //External
-func EvtAccepted(evt *Evt, indexPtr *int16){
+func EvtAccepted(evt *Evt, indexPtr *int16) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 	index := *indexPtr
 	switch evt.Type {
-	case CALL :
+	case CALL:
 		if evt.Supervise {
 			addOrder(evt.Floor, evt.Button, 0, index)
 		} else {
@@ -120,30 +117,30 @@ func EvtAccepted(evt *Evt, indexPtr *int16){
 }
 
 //External
-func EvtDismissed(evt *Evt, indexPtr *int16){
+func EvtDismissed(evt *Evt, indexPtr *int16) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 	switch evt.Type {
-	case CALL :
+	case CALL:
 		delegateButtonPress(evt.Floor, evt.Button)
 	}
 }
 
 //External
-func EvtRegister(evt *Evt, indexPtr *int16){
+func EvtRegister(evt *Evt, indexPtr *int16) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 	index := *indexPtr
 	switch evt.Type {
-	case CALL :
+	case CALL:
 		if evt.Supervise {
 			addOrder(evt.Floor, evt.Button, index, 0)
-			
+
 		} else {
 			addOrder(evt.Floor, evt.Button, 0, index)
 		}
 
-	case STATE :
+	case STATE:
 		sm.nodes[index].floor = evt.Floor
 		sm.nodes[index].target = evt.Target
 		if sm.nodes[index].stuck && !evt.Stuck && stashed {
@@ -151,7 +148,6 @@ func EvtRegister(evt *Evt, indexPtr *int16){
 			releaseStashedOrders()
 		}
 		sm.nodes[index].stuck = evt.Stuck
-
 
 		evt.Cleared[CAB] = false
 		removeOrders(evt.Floor, evt.Cleared)
@@ -163,7 +159,7 @@ func EvtRegister(evt *Evt, indexPtr *int16){
 }
 
 //external function
-func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) *int16{
+func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) *int16 {
 	sm.mutex.Lock()
 	index := int16(sm.numNodes)
 	sm.nodes[index].id = id
@@ -181,13 +177,13 @@ func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) *i
 }
 
 //external function
-func RemoveNode(indexPtr *int16){
+func RemoveNode(indexPtr *int16) {
 	sm.mutex.Lock()
 	index := *indexPtr
 	print.Line("Index ", index)
 	sm.numNodes--
-	for i := index; i < int16(sm.numNodes); i++{
-		sm.nodes[i] = sm.nodes[i + 1]
+	for i := index; i < int16(sm.numNodes); i++ {
+		sm.nodes[i] = sm.nodes[i+1]
 		*sm.nodes[i].index--
 	}
 	redistributeOrders(index, true)
@@ -195,7 +191,7 @@ func RemoveNode(indexPtr *int16){
 }
 
 //External
-func GetState(index int16) (int16, int16, bool){
+func GetState(index int16) (int16, int16, bool) {
 	sm.mutex.Lock()
 	floor := sm.nodes[index].floor
 	target := sm.nodes[index].target
@@ -204,14 +200,13 @@ func GetState(index int16) (int16, int16, bool){
 	return floor, target, stuck
 }
 
-
 //External
-func StatusUpdate(floor int16, target int16, stuck bool, cleared [3]bool){
+func StatusUpdate(floor int16, target int16, stuck bool, cleared [3]bool) {
 	sm.mutex.Lock()
 
 	sm.nodes[ME].floor = floor
 	sm.nodes[ME].target = target
-	if stuck && !sm.nodes[ME].stuck{
+	if stuck && !sm.nodes[ME].stuck {
 		sm.nodes[ME].stuck = stuck
 		redistributeOrders(ME, !stuck)
 	} else if stashed && !stuck {
@@ -230,7 +225,7 @@ func StatusUpdate(floor int16, target int16, stuck bool, cleared [3]bool){
 }
 
 //External
-func NewButtonPress(floor int16, buttonType uint8){
+func NewButtonPress(floor int16, buttonType uint8) {
 	sm.mutex.Lock()
 	delegateButtonPress(floor, buttonType)
 	sm.mutex.Unlock()
@@ -242,8 +237,8 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 	if sm.orders[floor][buttonType] != NONE {
 		return
 	}
-	if buttonType == CAB || sm.numNodes == 1{
-		if sm.nodes[0].stuck && buttonType != CAB{
+	if buttonType == CAB || sm.numNodes == 1 {
+		if sm.nodes[0].stuck && buttonType != CAB {
 			stashOrder(floor, buttonType)
 			return
 		}
@@ -269,24 +264,23 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 	}
 
 	evt := Evt{Type: CALL, Floor: floor, Button: buttonType}
-	if index == 0{
+	if index == 0 {
 		if sm.numNodes > 1 {
 			evt.Supervise = true
 			sm.nodes[1].send <- &evt
 		}
-	}else{
+	} else {
 		evt.Supervise = false
 		sm.nodes[index].send <- &evt
 	}
 }
-
 
 //internal
 func redistributeOrders(index int16, removed bool) {
 	stuck := !removed
 	//Stuck or removed, redistribute orders
 	for f := int16(0); f < m; f++ {
-		if sm.orders[f][UP] == index{
+		if sm.orders[f][UP] == index {
 			sm.orders[f][UP] = NONE
 			supervised := sm.supervisors[f][UP] != NONE
 			sm.supervisors[f][UP] = NONE
@@ -296,7 +290,7 @@ func redistributeOrders(index int16, removed bool) {
 				delegateButtonPress(f, UP)
 			}
 		}
-		if sm.orders[f][DOWN] == index{
+		if sm.orders[f][DOWN] == index {
 			sm.orders[f][DOWN] = NONE
 			supervised := sm.supervisors[f][DOWN] != NONE
 			sm.supervisors[f][DOWN] = NONE
@@ -311,10 +305,9 @@ func redistributeOrders(index int16, removed bool) {
 	//TODO: maybe add new supervisor (Not really necessary according to spec)
 }
 
-
 //internal
 func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
-	node := &(sm.nodes[index]);
+	node := &(sm.nodes[index])
 	var cost int16
 
 	if node.stuck {
@@ -333,19 +326,19 @@ func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 		dir = UP
 	}
 
-	if buttonType == UP && dir == DOWN {                          	   //Kall oppover, men heisen går nedover
-		cost =  node.floor + floor
+	if buttonType == UP && dir == DOWN { //Kall oppover, men heisen går nedover
+		cost = node.floor + floor
 
-	}else if buttonType == UP && dir == UP && floor < node.floor {       //Kall oppover, men heisen er over kallet
-		cost =  (m - 1) - node.floor + (m - 1) - floor
+	} else if buttonType == UP && dir == UP && floor < node.floor { //Kall oppover, men heisen er over kallet
+		cost = (m - 1) - node.floor + (m - 1) - floor
 
-	}else if buttonType == DOWN && dir == UP {                           //Kall nedover, men heisen går oppover
-		cost =  (m - 1) - node.floor + (m - 1) - floor
+	} else if buttonType == DOWN && dir == UP { //Kall nedover, men heisen går oppover
+		cost = (m - 1) - node.floor + (m - 1) - floor
 
-	}else if buttonType == DOWN && dir == DOWN && floor > node.floor {   //Kall nedover, men heisen er under kallet
-		cost =  node.floor + floor
+	} else if buttonType == DOWN && dir == DOWN && floor > node.floor { //Kall nedover, men heisen er under kallet
+		cost = node.floor + floor
 
-	}else {
+	} else {
 		cost = node.floor - floor
 		if node.floor < floor {
 			cost = -cost
@@ -354,9 +347,8 @@ func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 	return int(cost), false
 }
 
-
 //internal
-func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
+func addOrder(floor int16, buttonType uint8, index int16, supervisor int16) {
 	sm.orders[floor][buttonType] = index
 	sm.supervisors[floor][buttonType] = supervisor
 	io.SetButtonLight(floor, buttonType, 1)
@@ -366,15 +358,15 @@ func addOrder(floor int16, buttonType uint8, index int16, supervisor int16){
 	storeStateMap()
 }
 
-func storeStateMap(){
+func storeStateMap() {
 	tempMap := sm.orders
 
 	if stashed {
 		for f := int16(0); f < m; f++ {
-			if stashedOrders[f][UP]{
+			if stashedOrders[f][UP] {
 				tempMap[f][UP] = ME
 			}
-			if stashedOrders[f][DOWN]{
+			if stashedOrders[f][DOWN] {
 				tempMap[f][DOWN] = ME
 			}
 		}
@@ -384,7 +376,7 @@ func storeStateMap(){
 }
 
 //internal
-func removeOrders(floor int16, clear [3]bool){
+func removeOrders(floor int16, clear [3]bool) {
 	if clear[UP] {
 		sm.orders[floor][UP] = NONE
 		sm.supervisors[floor][UP] = NONE
@@ -404,19 +396,19 @@ func removeOrders(floor int16, clear [3]bool){
 }
 
 //internal
-func stashOrder(floor int16, buttonType uint8){
+func stashOrder(floor int16, buttonType uint8) {
 	stashed = true
 	stashedOrders[floor][buttonType] = true
 }
 
 //internal
-func releaseStashedOrders(){
+func releaseStashedOrders() {
 	for f := int16(0); f < m; f++ {
-		if stashedOrders[f][UP]{
+		if stashedOrders[f][UP] {
 			stashedOrders[f][UP] = false
 			delegateButtonPress(f, UP)
 		}
-		if stashedOrders[f][DOWN]{
+		if stashedOrders[f][DOWN] {
 			stashedOrders[f][DOWN] = false
 			delegateButtonPress(f, DOWN)
 		}
@@ -424,16 +416,17 @@ func releaseStashedOrders(){
 	stashed = false
 }
 
+var elevPrint func(int)
 
-func PrintMap() int{
+func PrintMap() int {
 	numlines := 6 + int(m)
 
 	num := int(sm.numNodes)
-	fmt.Printf("  F - | U , D , C | \n");
-	for f := m-1; f >= 0; f--{
-		fmt.Printf("%3d - |%3d,%3d,%3d|",f, sm.orders[f][UP],
-								      		  sm.orders[f][DOWN],
-								      		  sm.orders[f][CAB])
+	fmt.Printf("  F - | U , D , C | \n")
+	for f := m - 1; f >= 0; f-- {
+		fmt.Printf("%3d - |%3d,%3d,%3d|", f, sm.orders[f][DOWN],
+			sm.orders[f][UP],
+			sm.orders[f][CAB])
 		u := 0
 		d := 0
 		if stashedOrders[f][UP] {
@@ -442,7 +435,9 @@ func PrintMap() int{
 		if stashedOrders[f][DOWN] {
 			d = 1
 		}
-		fmt.Printf(" - |%3d,%3d|\n",u,d)
+		fmt.Printf(" - |%3d,%3d|", u, d)
+		elevPrint(int(f))
+		fmt.Printf("\n")
 	}
 	fmt.Printf("Connected nodes")
 
@@ -464,12 +459,16 @@ func PrintMap() int{
 	fmt.Printf("\nstuck  |")
 	for n := 0; n < num; n++ {
 		t := 0
-		if sm.nodes[n].stuck{
+		if sm.nodes[n].stuck {
 			t = 1
 		}
 		fmt.Printf("%3d |", t)
 	}
 
-	fmt.Printf("\n");
+	fmt.Printf("\n")
 	return numlines
+}
+
+func RegisterElevPrint(f func(int)) {
+	elevPrint = f
 }

@@ -2,8 +2,9 @@ package elev
 
 import (
 	"87/elev/io"
-	"87/statemap"
 	"87/print"
+	"87/statemap"
+	"fmt"
 	"time"
 )
 
@@ -33,28 +34,26 @@ var state int = init_s
 
 //current
 var cFloor int16 = NONE
-var	cTarget int16 = NONE
-var	cDir uint8 = UP
+var cTarget int16 = NONE
+var cDir uint8 = UP
 
-
-var orders[m][3] bool
+var orders [m][3]bool
 var openTimer *time.Timer
 var stuckTimer *time.Timer
 var evt_c chan sm.ButtonPress
 
-
 func Init(id uint8) bool {
-	if !io.Init(){
+	if !io.Init() {
 		return false
 	}
 	io.ClearAllLights()
 
 	openTimer = time.NewTimer(0 * time.Millisecond)
-	<- openTimer.C
+	<-openTimer.C
 
 	evt_c = make(chan sm.ButtonPress, m*3)
 	sm.Init(id, evt_c)
-
+	sm.RegisterElevPrint(printFloorMap)
 
 	stuckTimer = time.NewTimer(2 * time.Second)
 	io.SetMotor(UP)
@@ -63,12 +62,12 @@ func Init(id uint8) bool {
 }
 
 //Any event originates from this function (only one evt function called at a time)
-func triggerEvents(){
+func triggerEvents() {
 	for {
 		if io.GetInputs() {
 			for {
 				floor, evtType := io.GetEvent()
-				if(evtType > 3){
+				if evtType > 3 {
 					break
 				}
 				////fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
@@ -80,31 +79,30 @@ func triggerEvents(){
 				go sm.NewButtonPress(floor, evtType)
 			}
 		}
-		for data := true; data;{
+		for data := true; data; {
 			select {
-			case Press := <- evt_c:
+			case Press := <-evt_c:
 				clearedOrders := evtExternalInput(Press.Floor, Press.Type)
 				go sm.StatusUpdate(cFloor, cTarget, state == stuck_s, clearedOrders)
-			case <- openTimer.C:
+			case <-openTimer.C:
 				evtTimeout()
-			case <- stuckTimer.C:
+			case <-stuckTimer.C:
 				evtStuck()
 				go sm.StatusUpdate(cFloor, cTarget, true, [3]bool{})
 			default:
 				data = false
 			}
 		}
-		time.Sleep(10*time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-
 func evtExternalInput(floor int16, buttonType uint8) [3]bool {
-	print.Format("New Order %d, %s\n",floor, types[buttonType])
+	print.Format("New Order %d, %s\n", floor, types[buttonType])
 
 	orders[floor][buttonType] = true
 	nTarget, nDir := newTarget(cFloor, cDir)
-	
+
 	clearedOrders := [3]bool{}
 
 	switch state {
@@ -133,26 +131,24 @@ func evtExternalInput(floor int16, buttonType uint8) [3]bool {
 	return clearedOrders
 }
 
-
-func evtTimeout(){
+func evtTimeout() {
 	io.SetDoorLight(0)
-	if cTarget != NONE{
+	if cTarget != NONE {
 		cDir := UP
 		if cFloor > cTarget {
 			cDir = DOWN
 		}
 		resetTimer(stuckTimer, 3)
 		io.SetMotor(cDir)
-		
+
 		state = executing_s
 		return
 	}
-	
+
 	state = idle_s
 }
 
-
-func evtStuck(){
+func evtStuck() {
 	switch state {
 	case executing_s:
 		state = stuck_s
@@ -160,8 +156,7 @@ func evtStuck(){
 	}
 }
 
-
-func evtFloorReached(nFloor int16) [3]bool  {
+func evtFloorReached(nFloor int16) [3]bool {
 	io.SetFloorLight(nFloor)
 	resetTimer(stuckTimer, 3)
 	nTarget, nDir := newTarget(nFloor, cDir)
@@ -170,7 +165,7 @@ func evtFloorReached(nFloor int16) [3]bool  {
 	case open_s:
 	case idle_s:
 	default:
-		if cTarget == nFloor{
+		if cTarget == nFloor {
 			openDoor()
 			state = open_s
 			clearedOrders = orderComplete(nFloor, cDir, nDir)
@@ -193,8 +188,7 @@ func evtFloorReached(nFloor int16) [3]bool  {
 	return clearedOrders
 }
 
-
-func openDoor(){
+func openDoor() {
 	io.SetMotor(STOP)
 	io.SetDoorLight(1)
 	stopTimer(stuckTimer)
@@ -204,28 +198,32 @@ func openDoor(){
 //Returns first in current direction
 //If non existant, returns first in other direction
 //Assumes it swaps direction if no orders in current direction
-func newTarget(floor int16, dir uint8) (int16, uint8){
+func newTarget(floor int16, dir uint8) (int16, uint8) {
 	above := NONE
 	below := NONE
-	for i := (floor + 1) * 3 ; i < m * 3; i++{
-		if orders[i / 3][i % 3] {
-			above = i / 3
+	for i := (floor + 1) * 3; i < m*3; i++ {
+		if orders[i/3][i%3] {
+			if above != NONE && i%3 == int16(UP) || above == NONE {
+				above = i / 3
+			}
 			break
 		}
 	}
-	for i := int16(0); i < floor * 3; i++{
-		if orders[i / 3][i % 3] {
-			below = i / 3
+	for i := int16(0); i < floor*3; i++ {
+		if orders[i/3][i%3] {
+			if below != NONE && i%3 == int16(DOWN) || below == NONE {
+				below = i / 3
+			}
 		}
 	}
-	if dir == UP { 
+	if dir == UP {
 		if above != NONE {
 			return above, UP
 		}
 		return below, DOWN
 
-	//Dir down
-	}else if below != NONE {
+		//Dir down
+	} else if below != NONE {
 		return below, DOWN
 	}
 	return above, UP
@@ -251,24 +249,39 @@ func orderComplete(floor int16, dir uint8, newDir uint8) [3]bool {
 	return cleared
 }
 
-
-func stopTimer(t *time.Timer){
+func stopTimer(t *time.Timer) {
 	if !t.Stop() {
 		select {
 		case <-t.C: //it just completed (triggerEvents will not catch it)
-		default:	//it was not running
+		default: //it was not running
 		}
 	}
 }
 
-func resetTimer(t *time.Timer, s time.Duration){
+func resetTimer(t *time.Timer, s time.Duration) {
 	stopTimer(t)
 	t.Reset(s * time.Second)
 }
 
-func dropOrders(){
-	for f := int16(0); f < m; f++{
+func dropOrders() {
+	for f := int16(0); f < m; f++ {
 		orders[f][UP] = false
 		orders[f][DOWN] = false
 	}
+}
+
+func printFloorMap(floor int) {
+	cab := 0
+	up := 0
+	down := 0
+	if orders[floor][CAB] {
+		cab = 1
+	}
+	if orders[floor][UP] {
+		up = 1
+	}
+	if orders[floor][DOWN] {
+		down = 1
+	}
+	fmt.Printf(" - |%3d |%3d |%3d ", down, up, cab)
 }

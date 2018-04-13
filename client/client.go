@@ -1,32 +1,31 @@
 package client
 
 import (
-	"87/statemap"
 	"87/encode"
 	"87/network"
 	"87/print"
+	"87/statemap"
 	"sync"
 	"time"
 )
 
 //felt må ha stor forbokstav for å kunne bli konvertert fra []byte
-type Msg_t struct{
-	TalkID uint32
+type Msg_t struct {
+	TalkID   uint32
 	ClientID uint8
-	Type uint8
-	Evt sm.Evt
+	Type     uint8
+	Evt      sm.Evt
 }
 
-
-type client struct{
-	id uint8
-	smIndex *int16
-	conn com.Connection
-	dcCh chan bool
+type client struct {
+	id         uint8
+	smIndex    *int16
+	conn       com.Connection
+	dcCh       chan bool
 	talkDoneCh chan uint32
-	msgCh chan []byte
-	evtCh chan *sm.Evt
-	talks_m map[uint32]chan *Msg_t
+	msgCh      chan []byte
+	evtCh      chan *sm.Evt
+	talks_m    map[uint32]chan *Msg_t
 }
 
 //flags
@@ -42,8 +41,7 @@ var talks uint32 = 0
 var talkTex *sync.Mutex
 var myID uint8
 
-
-func Init(id uint8){
+func Init(id uint8) {
 	talkTex = &sync.Mutex{}
 	BUFLEN = uint8(encode.Size(Msg_t{}))
 	myID = id
@@ -58,7 +56,7 @@ func testErr(err error, msg string) bool {
 	return false
 }
 
-func NewClient(conn com.Connection, flag bool){
+func NewClient(conn com.Connection, flag bool) {
 	msg := Msg_t{ClientID: myID, Type: INTRO}
 	status := &msg.Evt
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
@@ -77,28 +75,27 @@ func NewClient(conn com.Connection, flag bool){
 	status = &intro.Evt
 
 	var cli client
-	cli.id 			= intro.ClientID
-	cli.conn 		= conn
-	cli.talkDoneCh  = make(chan uint32)
-	cli.dcCh 		= make(chan bool)
-	cli.evtCh 		= make(chan *sm.Evt, 10)
-	cli.msgCh 		= make(chan []byte, 10)
-	cli.talks_m 	= make(map[uint32]chan *Msg_t)
-	cli.smIndex		= sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evtCh)
+	cli.id = intro.ClientID
+	cli.conn = conn
+	cli.talkDoneCh = make(chan uint32)
+	cli.dcCh = make(chan bool)
+	cli.evtCh = make(chan *sm.Evt, 10)
+	cli.msgCh = make(chan []byte, 10)
+	cli.talks_m = make(map[uint32]chan *Msg_t)
+	cli.smIndex = sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evtCh)
 
 	print.Format("Added node with id: %d\n", cli.id)
 	go routeClient(&cli)
 }
 
-func closeClient(c *client){
-	print.Format("Connection to %d closed.\n",c.id)
+func closeClient(c *client) {
+	print.Format("Connection to %d closed.\n", c.id)
 
 	sm.RemoveNode(c.smIndex)
 	talkTex.Lock()
 	close(c.talkDoneCh)
 	c.talkDoneCh = nil
 	close(c.dcCh)
-
 
 	for _, ch := range c.talks_m {
 		close(ch)
@@ -109,7 +106,7 @@ func closeClient(c *client){
 	c.conn.Close()
 }
 
-func routeClient(c *client){
+func routeClient(c *client) {
 	//Unique id for each talk. Talks initiated by dialer are odd numbered and vice versa
 	var TalkCounter uint32 = 0
 	if myID < c.id {
@@ -118,14 +115,15 @@ func routeClient(c *client){
 
 	go c.conn.Listen(c.msgCh, BUFLEN)
 	go pingClient(TalkCounter, c)
-	TalkCounter+=2
+	TalkCounter += 2
 
 	defer print.StaticVars("ID: ", &c.id, " TalkCounter: ", &TalkCounter).Remove()
 
 	for {
 		select {
-			//TcpListen has received a message from client
-			case data, ok := <- c.msgCh: {
+		//TcpListen has received a message from client
+		case data, ok := <-c.msgCh:
+			{
 				if !ok {
 					//Client is non responsive
 					closeClient(c)
@@ -133,19 +131,19 @@ func routeClient(c *client){
 				}
 				newMsg := toMsg(data)
 				//Notify correct protocol
-				if !notifyTalk(c.talks_m, newMsg){
+				if !notifyTalk(c.talks_m, newMsg) {
 					newTalk(newMsg, c, nil, false)
 				}
 			}
 
-			case evt := <- c.evtCh :
-				newMsg := &Msg_t{Type: EVT, Evt: *evt}
-				newTalk(newMsg, c, &TalkCounter, true)
+		case evt := <-c.evtCh:
+			newMsg := &Msg_t{Type: EVT, Evt: *evt}
+			newTalk(newMsg, c, &TalkCounter, true)
 		}
 	}
 }
 
-func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool){
+func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool) {
 	newCh := make(chan *Msg_t)
 	talkTex.Lock()
 
@@ -168,8 +166,7 @@ func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool){
 	}
 }
 
-
-func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
+func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool {
 	//Ignore ping messages (TalkID <= 1)
 	if msg.TalkID > 1 {
 		talkTex.Lock()
@@ -180,10 +177,10 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 			return false
 		}
 		//Try to forward for *at least* 100us
-		go func(){
+		go func() {
 			select {
 			case recvChan <- msg:
-			case <- time.After(100 * time.Microsecond):
+			case <-time.After(100 * time.Microsecond):
 				print.Format("Couldn't forward message: %d\n", msg.TalkID)
 			}
 		}()
@@ -191,52 +188,47 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool{
 	return true
 }
 
-
-func endTalk(c *client, id uint32){
+func endTalk(c *client, id uint32) {
 	talkTex.Lock()
 	delete(c.talks_m, id)
 	talks--
 	talkTex.Unlock()
 }
 
-
-func pingClient(talkID uint32, c *client){
+func pingClient(talkID uint32, c *client) {
 	msg := Msg_t{TalkID: talkID, Type: PING}
-	for{
+	for {
 		select {
-		case <- c.dcCh :
+		case <-c.dcCh:
 			//client dc
 			return
-		case <- time.After(40 * time.Millisecond) :
+		case <-time.After(20 * time.Millisecond):
 			c.send(&msg)
 		}
 	}
 }
 
-
-func sendEvt(msg *Msg_t, talkCh <-chan *Msg_t, c *client){
+func sendEvt(msg *Msg_t, talkCh <-chan *Msg_t, c *client) {
 	c.send(msg)
 	if getACK(msg, talkCh, c) {
 		go sm.EvtAccepted(&msg.Evt, c.smIndex)
 	} else {
 		go sm.EvtDismissed(&msg.Evt, c.smIndex)
 	}
-	endTalk(c,msg.TalkID)
+	endTalk(c, msg.TalkID)
 }
 
-
-func recvEvt(msg *Msg_t, talkCh <-chan *Msg_t, c *client){
+func recvEvt(msg *Msg_t, talkCh <-chan *Msg_t, c *client) {
 	go sm.EvtRegister(&msg.Evt, c.smIndex)
 	sendACK(msg, talkCh, c)
-	endTalk(c,msg.TalkID)
+	endTalk(c, msg.TalkID)
 }
-
 
 func getACK(msg *Msg_t, talkCh <-chan *Msg_t, c *client) bool {
 	attempts := 0
 	for {
 		select {
-		case rcvMsg, ok := <- talkCh:
+		case rcvMsg, ok := <-talkCh:
 			if !ok {
 				//Client closed
 				return false
@@ -247,7 +239,7 @@ func getACK(msg *Msg_t, talkCh <-chan *Msg_t, c *client) bool {
 				print.Format("Talk : %d, received unexpected message\n", rcvMsg.TalkID)
 			}
 
-		case <- time.After(30 * time.Millisecond) :
+		case <-time.After(30 * time.Millisecond):
 			//Ack not received
 			print.Format("Talk: %d, ack not received\n", msg.TalkID)
 			if attempts == 3 {
@@ -267,7 +259,7 @@ func sendACK(msg *Msg_t, talkCh <-chan *Msg_t, c *client) bool {
 	//Listen for further messages (in case the ack got lost)
 	for {
 		select {
-		case rcvMsg, ok := <- talkCh:
+		case rcvMsg, ok := <-talkCh:
 			if !ok {
 				//Client closed
 				return false
@@ -275,27 +267,24 @@ func sendACK(msg *Msg_t, talkCh <-chan *Msg_t, c *client) bool {
 			//Ack not received (received duplicate message)
 			c.send(msg)
 			print.Format("Talk : %d, resending Ack\n", rcvMsg.TalkID)
-		case <- time.After(100 * time.Millisecond) :
+		case <-time.After(100 * time.Millisecond):
 			//Ack assumed received (or 3-4 tcp messages lost?)
 			return true
 		}
 	}
 }
 
-
-func (c client) send(msg *Msg_t){
+func (c client) send(msg *Msg_t) {
 	buf := toBytes(msg)
 	c.conn.Send(buf)
 }
 
-
-func toMsg(data []byte) *Msg_t{
+func toMsg(data []byte) *Msg_t {
 	var msg Msg_t
 	encode.FromBytes(data, &msg)
 	return &msg
 }
 
-
-func toBytes(data *Msg_t) []byte{
+func toBytes(data *Msg_t) []byte {
 	return encode.ToBytes(*data)
 }
