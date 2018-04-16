@@ -4,7 +4,6 @@ import (
 	"xx/elev/io"
 	"xx/print"
 	"xx/statemap"
-	"fmt"
 	"time"
 )
 

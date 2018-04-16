@@ -3,6 +3,7 @@ package file
 import (
     "os"
     "sync"
+    "xx/print"
 )
 
 var mutex *sync.Mutex
@@ -15,7 +16,7 @@ var fileNames [2]string = [2]string{"./files/primary","./files/backup"}
 
 func check(e error) {
     if e != nil {
-        print.Format("%v\n", err)
+        print.Format("%v\n", e)
     }
 }
 
