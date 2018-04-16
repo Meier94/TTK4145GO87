@@ -240,7 +240,7 @@ func PrintMap() int {
 	numlines := 6 + int(m)
 
 	num := int(sm.numNodes)
-	fmt.Printf("  F - | U , D , C | \n")
+	fmt.Printf("  F - | D , U , C | \n")
 	for f := m - 1; f >= 0; f-- {
 		fmt.Printf("%3d - |%3d,%3d,%3d|", f, sm.orders[f][DOWN],
 			sm.orders[f][UP],
