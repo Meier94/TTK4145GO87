@@ -1,9 +1,9 @@
 package elev
 
 import (
-	"87/elev/io"
-	"87/print"
-	"87/statemap"
+	"xx/elev/io"
+	"xx/print"
+	"xx/statemap"
 	"fmt"
 	"time"
 )
@@ -29,10 +29,9 @@ const executing_s = 4
 //Print helper
 var types [4]string = [4]string{"Up", "Down", "Cab", "Arrival"}
 
-//variables
 var state int = init_s
 
-//current
+//Current
 var cFloor int16 = NONE
 var cTarget int16 = NONE
 var cDir uint8 = UP
@@ -40,6 +39,9 @@ var cDir uint8 = UP
 var orders [m][3]bool
 var openTimer *time.Timer
 var stuckTimer *time.Timer
+
+//Button presses are sent to statemap
+//Once processed they are sent over this channel
 var evt_c chan sm.ButtonPress
 
 func Init(id uint8) bool {
@@ -53,7 +55,6 @@ func Init(id uint8) bool {
 
 	evt_c = make(chan sm.ButtonPress, m*3)
 	sm.Init(id, evt_c)
-	sm.RegisterElevPrint(printFloorMap)
 
 	stuckTimer = time.NewTimer(2 * time.Second)
 	io.SetMotor(UP)
@@ -61,16 +62,16 @@ func Init(id uint8) bool {
 	return true
 }
 
-//Any event originates from this function (only one evt function called at a time)
+//All events originates from this function (only one evt function called at a time)
 func triggerEvents() {
 	for {
 		if io.GetInputs() {
 			for {
 				floor, evtType := io.GetEvent()
+				//io.GetEvent will return evtType of 4 if all events are accounted for
 				if evtType > 3 {
 					break
 				}
-				////fmt.Printf("Event: %s, floor: %d\n",types[evtType],floor)
 				if evtType == FLOOR {
 					clearedOrders := evtFloorReached(floor)
 					go sm.StatusUpdate(cFloor, cTarget, false, clearedOrders)
@@ -79,6 +80,7 @@ func triggerEvents() {
 				go sm.NewButtonPress(floor, evtType)
 			}
 		}
+		//Check channels for new events
 		for data := true; data; {
 			select {
 			case Press := <-evt_c:
@@ -201,6 +203,7 @@ func openDoor() {
 func newTarget(floor int16, dir uint8) (int16, uint8) {
 	above := NONE
 	below := NONE
+	//Check for orders above
 	for i := (floor + 1) * 3; i < m*3; i++ {
 		if orders[i/3][i%3] {
 			if above != NONE && i%3 == int16(UP) || above == NONE {
@@ -209,6 +212,7 @@ func newTarget(floor int16, dir uint8) (int16, uint8) {
 			break
 		}
 	}
+	//Check for orders below
 	for i := int16(0); i < floor*3; i++ {
 		if orders[i/3][i%3] {
 			if below != NONE && i%3 == int16(DOWN) || below == NONE {
@@ -229,7 +233,7 @@ func newTarget(floor int16, dir uint8) (int16, uint8) {
 	return above, UP
 }
 
-//may not do anything
+
 func orderComplete(floor int16, dir uint8, newDir uint8) [3]bool {
 	cleared := [3]bool{}
 	if orders[floor][CAB] {
@@ -268,20 +272,4 @@ func dropOrders() {
 		orders[f][UP] = false
 		orders[f][DOWN] = false
 	}
-}
-
-func printFloorMap(floor int) {
-	cab := 0
-	up := 0
-	down := 0
-	if orders[floor][CAB] {
-		cab = 1
-	}
-	if orders[floor][UP] {
-		up = 1
-	}
-	if orders[floor][DOWN] {
-		down = 1
-	}
-	fmt.Printf(" - |%3d |%3d |%3d ", down, up, cab)
 }

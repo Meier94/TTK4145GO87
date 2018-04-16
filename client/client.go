@@ -1,15 +1,15 @@
 package client
 
 import (
-	"87/encode"
-	"87/network"
-	"87/print"
-	"87/statemap"
+	"xx/encode"
+	"xx/network"
+	"xx/print"
+	"xx/statemap"
 	"sync"
 	"time"
 )
 
-//felt må ha stor forbokstav for å kunne bli konvertert fra []byte
+//Struct fields must be public for marshalling
 type Msg_t struct {
 	TalkID   uint32
 	ClientID uint8
@@ -18,14 +18,14 @@ type Msg_t struct {
 }
 
 type client struct {
-	id         uint8
-	smIndex    *int16
-	conn       com.Connection
-	dcCh       chan bool
-	talkDoneCh chan uint32
-	msgCh      chan []byte
-	evtCh      chan *sm.Evt
-	talks_m    map[uint32]chan *Msg_t
+	id         uint8						//Client ID
+	smIndex    *int16						//Clients index in statemap (not constant)
+	conn       com.Connection				//Network handle
+	dcCh       chan bool					//Channel to notify goroutines of dc
+	msgCh      chan []byte 					//Channel for incoming messages
+	evtCh      chan *sm.Evt 				//Channel for outgoing events from statemap
+	talks_m    map[uint32]chan *Msg_t		//Map of active talks for the client
+	mapTex	   *sync.Mutex					//Mutex for the talk map
 }
 
 //flags
@@ -35,14 +35,11 @@ const PING uint8 = 201
 const INTRO uint8 = 202
 const EVT uint8 = 203
 
-var BUFLEN uint8
-var talks uint32 = 0
-
-var talkTex *sync.Mutex
+var BUFLEN uint8							
+var talks uint32 = 0						//Active talk counter for debugging
 var myID uint8
 
 func Init(id uint8) {
-	talkTex = &sync.Mutex{}
 	BUFLEN = uint8(encode.Size(Msg_t{}))
 	myID = id
 	print.StaticVars("Active talks: ", &talks)
@@ -50,7 +47,6 @@ func Init(id uint8) {
 
 func testErr(err error, msg string) bool {
 	if err != nil {
-		//fmt.Println(msg,err)
 		return true
 	}
 	return false
@@ -62,26 +58,26 @@ func NewClient(conn com.Connection, flag bool) {
 	status.Floor, status.Target, status.Stuck = sm.GetState(0)
 	client{conn: conn}.send(&msg)
 
-	in := conn.Read(BUFLEN)
-	if in == nil {
+	rcvData := conn.Read(BUFLEN)
+	if rcvData == nil {
 		conn.Close()
 		return
 	}
-	intro := toMsg(in)
-	if intro.Type != INTRO {
+	introMsg := toMsg(rcvData)
+	if introMsg.Type != INTRO {
 		conn.Close()
 		return
 	}
-	status = &intro.Evt
+	status = &introMsg.Evt
 
 	var cli client
-	cli.id = intro.ClientID
+	cli.id = introMsg.ClientID
 	cli.conn = conn
-	cli.talkDoneCh = make(chan uint32)
 	cli.dcCh = make(chan bool)
 	cli.evtCh = make(chan *sm.Evt, 10)
 	cli.msgCh = make(chan []byte, 10)
 	cli.talks_m = make(map[uint32]chan *Msg_t)
+	cli.mapTex = &sync.Mutex{}
 	cli.smIndex = sm.AddNode(cli.id, status.Floor, status.Target, status.Stuck, cli.evtCh)
 
 	print.Format("Added node with id: %d\n", cli.id)
@@ -92,20 +88,19 @@ func closeClient(c *client) {
 	print.Format("Connection to %d closed.\n", c.id)
 
 	sm.RemoveNode(c.smIndex)
-	talkTex.Lock()
-	close(c.talkDoneCh)
-	c.talkDoneCh = nil
+	c.mapTex.Lock()
 	close(c.dcCh)
 
 	for _, ch := range c.talks_m {
 		close(ch)
 	}
-	talkTex.Unlock()
+	c.mapTex.Unlock()
 
 	//Remove from communication module
 	c.conn.Close()
 }
 
+//Goroutine that routes messages to/from a client
 func routeClient(c *client) {
 	//Unique id for each talk. Talks initiated by dialer are odd numbered and vice versa
 	var TalkCounter uint32 = 0
@@ -131,7 +126,7 @@ func routeClient(c *client) {
 				}
 				newMsg := toMsg(data)
 				//Notify correct protocol
-				if !notifyTalk(c.talks_m, newMsg) {
+				if !notifyTalk(c, newMsg) {
 					newTalk(newMsg, c, nil, false)
 				}
 			}
@@ -145,7 +140,7 @@ func routeClient(c *client) {
 
 func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool) {
 	newCh := make(chan *Msg_t)
-	talkTex.Lock()
+	c.mapTex.Lock()
 
 	talks++
 	if outgoing {
@@ -154,7 +149,7 @@ func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool) {
 	}
 
 	c.talks_m[msg.TalkID] = newCh
-	talkTex.Unlock()
+	c.mapTex.Unlock()
 
 	if outgoing {
 		go sendEvt(msg, newCh, c)
@@ -166,12 +161,12 @@ func newTalk(msg *Msg_t, c *client, counter *uint32, outgoing bool) {
 	}
 }
 
-func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool {
+func notifyTalk(c *client, msg *Msg_t) bool {
 	//Ignore ping messages (TalkID <= 1)
 	if msg.TalkID > 1 {
-		talkTex.Lock()
-		recvChan := talks_m[msg.TalkID]
-		talkTex.Unlock()
+		c.mapTex.Lock()
+		recvChan := c.talks_m[msg.TalkID]
+		c.mapTex.Unlock()
 
 		if recvChan == nil {
 			return false
@@ -189,10 +184,10 @@ func notifyTalk(talks_m map[uint32]chan *Msg_t, msg *Msg_t) bool {
 }
 
 func endTalk(c *client, id uint32) {
-	talkTex.Lock()
+	c.mapTex.Lock()
 	delete(c.talks_m, id)
 	talks--
-	talkTex.Unlock()
+	c.mapTex.Unlock()
 }
 
 func pingClient(talkID uint32, c *client) {

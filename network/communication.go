@@ -1,7 +1,7 @@
 package com
 
 import (
-	"87/print"
+	"xx/print"
 	"net"
 	"sync"
 	"time"
@@ -76,7 +76,6 @@ func (c Connection) Listen(msg_c chan<- []byte, bufLen uint8) {
 			close(msg_c)
 			return
 		}
-		//Translate into msg format
 		msg_c <- buf
 	}
 }
@@ -99,7 +98,7 @@ func (c Connection) Read(bufLen uint8) []byte {
 
 func udpListenForNodes() {
 	for {
-		Addr, err := net.ResolveUDPAddr("udp", ":55087")
+		Addr, err := net.ResolveUDPAddr("udp", ":55321")
 		if testErr(err, "Couldn't resolve UDP listen") {
 			continue
 		}
@@ -127,7 +126,7 @@ func udpListenForNodes() {
 			var conn net.Conn
 			//Try to dial 3 times
 			for i := 0; i < 3; i++ {
-				conn, err = net.Dial("tcp", ip+":4487")
+				conn, err = net.Dial("tcp", ip+":4123")
 
 				if !testErr(err, "TCP dial failed") {
 					break
@@ -148,7 +147,7 @@ func udpListenForNodes() {
 
 func udpBroadcastExistence() {
 	for {
-		Addr, err := net.ResolveUDPAddr("udp", "255.255.255.255:55087")
+		Addr, err := net.ResolveUDPAddr("udp", "255.255.255.255:55321")
 		if testErr(err, "Couldn't resolve UDPAddr broadcast") {
 			continue
 		}
@@ -171,7 +170,7 @@ func udpBroadcastExistence() {
 
 func tcpAcceptConnections() {
 	for {
-		ln, err := net.Listen("tcp", ":4487")
+		ln, err := net.Listen("tcp", ":4123")
 		if testErr(err, "TCP Listen failed") {
 			continue
 		}
