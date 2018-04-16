@@ -2,11 +2,11 @@ package main
 
 
 import (
-	"87/elev"
-	"87/network"
-	"87/client"
-	"87/elev/io"
-	"87/print"
+	"xx/elev"
+	"xx/network"
+	"xx/client"
+	"xx/elev/io"
+	"xx/print"
 	"runtime"
 	"flag"
 	"os"
@@ -17,7 +17,7 @@ import (
 	"strconv"
 )
 
-func setStopSignal(){
+func stopMotorOnExit(){
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func(){
@@ -28,25 +28,21 @@ func setStopSignal(){
 }
 
 func main() {
-	// Our id can be anything. Here we pass it on the command line, using
-	//  `go run main.go -id=our_id`
-	
-	var ids string
-	flag.StringVar(&ids, "id", "", "id of this peer")
+	var idString string
+	flag.StringVar(&idString, "id", "", "id of this peer")
 	flag.Parse()
 
-	idn, _ := strconv.Atoi(ids)
-	id := uint8(idn)
+	idNumber, _ := strconv.Atoi(idString)
+	id := uint8(idNumber)
 	fmt.Printf("%d\n",id)
 
 	print.Init()
 	print.Line(runtime.Version())
-	if !elev.Init(id){
-		print.Line("Couldn't start io")
-		return
-	}
+	
 
-	setStopSignal()
+	elev.Init(id)
+
+	stopMotorOnExit()
 	
 	client.Init(id)
 	ConnectionHandler := client.NewClient

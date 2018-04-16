@@ -12,13 +12,14 @@ import (
 const numStrings = 80
 
 //Allowed static print functions active at a time
+//Static prints are always visible
 const numStatic = 10
 
 type staticPrint struct{
 	e *list.Element
 }
 
-var mut *sync.Mutex
+var printTex *sync.Mutex
 
 var strings []string
 var static *list.List
@@ -27,14 +28,14 @@ var static *list.List
 func Init(){
 	strings = make([]string, 0, numStrings)
 	static = list.New()
-	mut = &sync.Mutex{}
+	printTex = &sync.Mutex{}
 	fmt.Printf("\n")
 }
 
 //Printf
 func Format(f string, args ...interface{}){
-	mut.Lock()
-	defer mut.Unlock()
+	printTex.Lock()
+	defer printTex.Unlock()
 	if len(strings) < numStrings {
 		strings  = append(strings, fmt.Sprintf(f, args...))
 	}
@@ -42,8 +43,8 @@ func Format(f string, args ...interface{}){
 
 //Println
 func Line(args ...interface{}){
-	mut.Lock()
-	defer mut.Unlock()
+	printTex.Lock()
+	defer printTex.Unlock()
 	if len(strings) < numStrings {
 		strings = append(strings, fmt.Sprintln(args...))
 	}
@@ -51,7 +52,7 @@ func Line(args ...interface{}){
 
 //Only one line allowed
 func StaticVars(args ...interface{}) staticPrint {
-	mut.Lock()
+	printTex.Lock()
 	f := func() int {
 		for _, v := range args {
 			switch t := v.(type){
@@ -64,29 +65,28 @@ func StaticVars(args ...interface{}) staticPrint {
 		fmt.Printf("\n")
 		return 1
 	}
-	mut.Unlock()
+	printTex.Unlock()
 	return AddStatic(f)
 }
 
-//Should preferably have fixed print height
 func AddStatic(f func() int) staticPrint {
-	mut.Lock()
-	defer mut.Unlock()
+	printTex.Lock()
+	defer printTex.Unlock()
 	return staticPrint{static.PushFront(f)}
 }
 
 func (print staticPrint) Remove(){
-	mut.Lock()
+	printTex.Lock()
 	static.Remove(print.e)
-	mut.Unlock()
+	printTex.Unlock()
 }
 
 
 var linesPrinted = 0
 //Prints buffered prints and calls static print functions
 func Display(){
-	mut.Lock()
-	defer mut.Unlock()
+	printTex.Lock()
+	defer printTex.Unlock()
 
 	if linesPrinted > 0 {
 		fmt.Printf("\x1b[%dA\r",linesPrinted) 	//up n lines

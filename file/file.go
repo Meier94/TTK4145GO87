@@ -3,6 +3,7 @@ package file
 import (
     "os"
     "sync"
+    "xx/print"
 )
 
 var mutex *sync.Mutex
@@ -15,7 +16,7 @@ var fileNames [2]string = [2]string{"./files/primary","./files/backup"}
 
 func check(e error) {
     if e != nil {
-        panic(e)
+        print.Format("%v\n", e)
     }
 }
 
@@ -38,7 +39,7 @@ func FindDataOfSize(size int) ([]byte, bool) {
 		if !exists {
 			continue
 		}
-		if data, correctLength := readIsSize(f, size); correctLength {
+		if data, correctLength := readOfSize(f, size); correctLength {
 			filesContainData = true
 			f.Close()
 			return data, true
@@ -67,7 +68,7 @@ func openFile(name string) (*os.File, bool) {
 	return f, true
 }
 
-func readIsSize(f *os.File, size int) ([]byte, bool){
+func readOfSize(f *os.File, size int) ([]byte, bool){
 	//Test if a file already exists
 	b := make([]byte, 2*size)
 	n, err := f.Read(b)

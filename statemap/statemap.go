@@ -1,10 +1,10 @@
 package sm
 
 import (
-	"87/elev/io"
-	"87/encode"
-	"87/file"
-	"87/print"
+	"xx/elev/io"
+	"xx/encode"
+	"xx/file"
+	"xx/print"
 	"fmt"
 	"sync"
 )
@@ -101,6 +101,7 @@ func Init(id uint8, elev_c chan<- ButtonPress) {
 	print.AddStatic(PrintMap)
 }
 
+//External functions lock the mutex and only call internal functions if any
 //External
 func EvtAccepted(evt *Evt, indexPtr *int16) {
 	sm.mutex.Lock()
@@ -149,6 +150,7 @@ func EvtRegister(evt *Evt, indexPtr *int16) {
 		}
 		sm.nodes[index].stuck = evt.Stuck
 
+		//CAB is local
 		evt.Cleared[CAB] = false
 		removeOrders(evt.Floor, evt.Cleared)
 
@@ -158,7 +160,7 @@ func EvtRegister(evt *Evt, indexPtr *int16) {
 	}
 }
 
-//external function
+//External
 func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) *int16 {
 	sm.mutex.Lock()
 	index := int16(sm.numNodes)
@@ -176,7 +178,7 @@ func AddNode(id uint8, floor int16, target int16, stuck bool, send chan *Evt) *i
 	return sm.nodes[index].index
 }
 
-//external function
+//External
 func RemoveNode(indexPtr *int16) {
 	sm.mutex.Lock()
 	index := *indexPtr
@@ -231,8 +233,61 @@ func NewButtonPress(floor int16, buttonType uint8) {
 	sm.mutex.Unlock()
 }
 
-//internal
-//burde kanskje returnere channel bare så fikser elev evt biffen?
+
+
+//External (Read non-critical for operation therefore no mutex)
+func PrintMap() int {
+	numlines := 6 + int(m)
+
+	num := int(sm.numNodes)
+	fmt.Printf("  F - | D , U , C | \n")
+	for f := m - 1; f >= 0; f-- {
+		fmt.Printf("%3d - |%3d,%3d,%3d|", f, sm.orders[f][DOWN],
+			sm.orders[f][UP],
+			sm.orders[f][CAB])
+		u := 0
+		d := 0
+		if stashedOrders[f][UP] {
+			u = 1
+		}
+		if stashedOrders[f][DOWN] {
+			d = 1
+		}
+		fmt.Printf(" - |%3d,%3d|", u, d)
+		fmt.Printf("\n")
+	}
+	fmt.Printf("Connected nodes")
+
+	fmt.Printf("\nid     |")
+	for n := 0; n < num; n++ {
+		fmt.Printf("%3d |", sm.nodes[n].id)
+	}
+
+	fmt.Printf("\nfloor  |")
+	for n := 0; n < num; n++ {
+		fmt.Printf("%3d |", sm.nodes[n].floor)
+	}
+
+	fmt.Printf("\ntarget |")
+	for n := 0; n < num; n++ {
+		fmt.Printf("%3d |", sm.nodes[n].target)
+	}
+
+	fmt.Printf("\nstuck  |")
+	for n := 0; n < num; n++ {
+		t := 0
+		if sm.nodes[n].stuck {
+			t = 1
+		}
+		fmt.Printf("%3d |", t)
+	}
+
+	fmt.Printf("\n")
+	return numlines
+}
+
+
+//Internal
 func delegateButtonPress(floor int16, buttonType uint8) {
 	if sm.orders[floor][buttonType] != NONE {
 		return
@@ -275,7 +330,7 @@ func delegateButtonPress(floor int16, buttonType uint8) {
 	}
 }
 
-//internal
+//Internal
 func redistributeOrders(index int16, removed bool) {
 	stuck := !removed
 	//Stuck or removed, redistribute orders
@@ -285,7 +340,7 @@ func redistributeOrders(index int16, removed bool) {
 			supervised := sm.supervisors[f][UP] != NONE
 			sm.supervisors[f][UP] = NONE
 			if stuck && index == ME && supervised {
-				//Supervisor will handle call. If unsupervised, delegate
+			//Supervisor will handle call. If unsupervised, delegate
 			} else {
 				delegateButtonPress(f, UP)
 			}
@@ -295,17 +350,15 @@ func redistributeOrders(index int16, removed bool) {
 			supervised := sm.supervisors[f][DOWN] != NONE
 			sm.supervisors[f][DOWN] = NONE
 			if stuck && index == ME && supervised {
-				//Supervisor will handle call. If unsupervised, delegate
+			//Supervisor will handle call. If unsupervised, delegate
 			} else {
 				delegateButtonPress(f, DOWN)
 			}
 		}
 	}
-	//if removed
-	//TODO: maybe add new supervisor (Not really necessary according to spec)
 }
 
-//internal
+//Internal
 func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 	node := &(sm.nodes[index])
 	var cost int16
@@ -347,7 +400,7 @@ func costFunction(floor int16, buttonType uint8, index int) (int, bool) {
 	return int(cost), false
 }
 
-//internal
+//Internal
 func addOrder(floor int16, buttonType uint8, index int16, supervisor int16) {
 	sm.orders[floor][buttonType] = index
 	sm.supervisors[floor][buttonType] = supervisor
@@ -358,6 +411,7 @@ func addOrder(floor int16, buttonType uint8, index int16, supervisor int16) {
 	storeStateMap()
 }
 
+//Internal
 func storeStateMap() {
 	tempMap := sm.orders
 
@@ -375,7 +429,7 @@ func storeStateMap() {
 	file.WriteFile(encode.ToBytes(tempMap))
 }
 
-//internal
+//Internal
 func removeOrders(floor int16, clear [3]bool) {
 	if clear[UP] {
 		sm.orders[floor][UP] = NONE
@@ -395,13 +449,13 @@ func removeOrders(floor int16, clear [3]bool) {
 	storeStateMap()
 }
 
-//internal
+//Internal
 func stashOrder(floor int16, buttonType uint8) {
 	stashed = true
 	stashedOrders[floor][buttonType] = true
 }
 
-//internal
+//Internal
 func releaseStashedOrders() {
 	for f := int16(0); f < m; f++ {
 		if stashedOrders[f][UP] {
@@ -414,61 +468,4 @@ func releaseStashedOrders() {
 		}
 	}
 	stashed = false
-}
-
-var elevPrint func(int)
-
-func PrintMap() int {
-	numlines := 6 + int(m)
-
-	num := int(sm.numNodes)
-	fmt.Printf("  F - | U , D , C | \n")
-	for f := m - 1; f >= 0; f-- {
-		fmt.Printf("%3d - |%3d,%3d,%3d|", f, sm.orders[f][DOWN],
-			sm.orders[f][UP],
-			sm.orders[f][CAB])
-		u := 0
-		d := 0
-		if stashedOrders[f][UP] {
-			u = 1
-		}
-		if stashedOrders[f][DOWN] {
-			d = 1
-		}
-		fmt.Printf(" - |%3d,%3d|", u, d)
-		elevPrint(int(f))
-		fmt.Printf("\n")
-	}
-	fmt.Printf("Connected nodes")
-
-	fmt.Printf("\nid     |")
-	for n := 0; n < num; n++ {
-		fmt.Printf("%3d |", sm.nodes[n].id)
-	}
-
-	fmt.Printf("\nfloor  |")
-	for n := 0; n < num; n++ {
-		fmt.Printf("%3d |", sm.nodes[n].floor)
-	}
-
-	fmt.Printf("\ntarget |")
-	for n := 0; n < num; n++ {
-		fmt.Printf("%3d |", sm.nodes[n].target)
-	}
-
-	fmt.Printf("\nstuck  |")
-	for n := 0; n < num; n++ {
-		t := 0
-		if sm.nodes[n].stuck {
-			t = 1
-		}
-		fmt.Printf("%3d |", t)
-	}
-
-	fmt.Printf("\n")
-	return numlines
-}
-
-func RegisterElevPrint(f func(int)) {
-	elevPrint = f
 }
